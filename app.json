@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitFlow",
     "slug": "HabitFlow",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -22,7 +22,8 @@
         "backgroundColor": "#1a1a2e"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.ianskaitis.HabitFlow"
+      "package": "com.ianskaitis.HabitFlow",
+      "versionCode": 6
     },
     "web": {
       "favicon": "./assets/favicon.png"

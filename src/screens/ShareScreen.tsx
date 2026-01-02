@@ -132,9 +132,15 @@ export default function ShareScreen({ navigation }: any) {
                                                                     height: 8,
                                                                     borderRadius: 2,
                                                                     backgroundColor: bg,
-                                                                    opacity: day.progress > 0 ? (0.4 + (day.progress / day.dailyTarget * 0.6)) : 1
+                                                                    opacity: day.progress > 0 ? (0.4 + (day.progress / day.dailyTarget * 0.6)) : 1,
+                                                                    justifyContent: 'center',
+                                                                    alignItems: 'center',
                                                                 }}
-                                                            />
+                                                            >
+                                                                {day.isExplicitlyFailed && (
+                                                                    <Text style={{ color: '#FFF', fontSize: 6, fontWeight: 'bold' }}>✕</Text>
+                                                                )}
+                                                            </View>
                                                         );
                                                     })}
                                                 </View>
