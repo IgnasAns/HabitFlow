@@ -164,6 +164,7 @@ export default function WidgetHub() {
                             {habits.map(habit => {
                                 const progress = habit.completions[todayKey] || 0;
                                 const isComplete = progress >= habit.dailyTarget;
+                                const isExplicitlyFailed = habit.explicitFailures?.[todayKey] || false;
                                 const themeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
 
                                 return (
@@ -174,6 +175,7 @@ export default function WidgetHub() {
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                         style={[
                                             styles.quickAction,
+                                            { borderColor: themeColor + '30' }, // Always show subtle border
                                             isComplete && { borderColor: themeColor }
                                         ]}
                                         onPress={() => {
@@ -197,17 +199,19 @@ export default function WidgetHub() {
                                             isComplete ? {
                                                 backgroundColor: themeColor,
                                                 shadowColor: themeColor,
-                                                shadowOffset: { width: 0, height: 0 },
-                                                shadowOpacity: 0.6,
-                                                shadowRadius: 8,
-                                                elevation: 6
+                                                shadowOffset: { width: 0, height: 4 },
+                                                shadowOpacity: 0.5,
+                                                shadowRadius: 12,
+                                                elevation: 10
+                                            } : isExplicitlyFailed ? {
+                                                backgroundColor: colors.dangerStart || '#EF4444',
                                             } : { borderColor: themeColor + '40', borderWidth: 2 }
                                         ]}>
                                             {isComplete ? (
                                                 <Text style={styles.checkMark}>✓</Text>
-                                            ) : (
-                                                <Text style={[styles.checkMark, { color: themeColor + '60', fontSize: 16 }]}>✕</Text>
-                                            )}
+                                            ) : isExplicitlyFailed ? (
+                                                <Text style={[styles.checkMark, { fontSize: 18 }]}>✕</Text>
+                                            ) : null}
                                         </View>
                                     </TouchableOpacity>
                                 );

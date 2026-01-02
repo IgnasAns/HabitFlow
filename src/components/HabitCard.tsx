@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, shadows } from '../theme';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Habit, GridDay } from '../types';
@@ -33,6 +34,8 @@ interface HabitCardProps {
     onToggle: (id: string, dateKey?: string) => void;
     onIncrement: (id: string, amount: number, dateKey?: string) => void;
     onPress: (id: string) => void;
+    drag?: () => void;
+    isActive?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -155,7 +158,7 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
         prev.themeColor === next.themeColor;
 });
 
-const HabitCard = ({ habit, onToggle, onIncrement, onPress }: HabitCardProps) => {
+const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: HabitCardProps) => {
     const { width: screenWidth } = useWindowDimensions();
 
     // Dynamic grid calculations - fit exactly VISIBLE_WEEKS within the card
@@ -279,9 +282,22 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress }: HabitCardProps) =>
     return (
         <AnimatedPressable
             onPress={() => onPress(habit.id)}
+            onLongPress={drag}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            style={[styles.container, cardStyle]}
+            style={[
+                styles.container,
+                cardStyle,
+                isActive && {
+                    zIndex: 1000,
+                    transform: [{ scale: 1.05 }],
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 20,
+                    elevation: 20,
+                }
+            ]}
         >
             <View style={[
                 styles.card,

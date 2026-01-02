@@ -43,7 +43,7 @@ export default function ShareScreen({ navigation }: any) {
                 showsVerticalScrollIndicator={false}
             >
                 {/* ViewShot captures everything inside this block */}
-                <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }} style={{ backgroundColor: colors.bgDark }}>
+                <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }} style={{ backgroundColor: colors.bgDark }}>
                     <View style={styles.capturePadding}>
                         {/* Header Section */}
                         <View style={styles.header}>
@@ -87,10 +87,10 @@ export default function ShareScreen({ navigation }: any) {
                                                 borderWidth: 1,
                                                 // Completed Glow
                                                 shadowColor: themeColor,
-                                                shadowOffset: { width: 0, height: 0 },
-                                                shadowOpacity: 0.6,
-                                                shadowRadius: 12,
-                                                elevation: 6
+                                                shadowOffset: { width: 0, height: 4 },
+                                                shadowOpacity: 0.5,
+                                                shadowRadius: 16,
+                                                elevation: 10
                                             }
                                         ]}
                                     >
@@ -259,8 +259,7 @@ const styles = StyleSheet.create({
         gap: 2,
         width: '100%',
         marginTop: spacing.sm,
-        // justifyContent: 'space-between' REMOVED in step 896
-        // Explicitly removed here too to keep consistency
+        justifyContent: 'center',
     },
     iconBox: {
         width: 40,

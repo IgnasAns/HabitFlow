@@ -11,6 +11,7 @@ type HabitAction =
     | { type: 'DELETE_HABIT'; payload: string }
     | { type: 'TOGGLE_COMPLETE'; payload: ToggleResult }
     | { type: 'SET_LOADING'; payload: boolean }
+    | { type: 'REORDER_HABITS'; payload: Habit[] }
     | { type: 'CLEAR_LAST_ACTION' };
 
 interface LastAction {
@@ -36,6 +37,8 @@ interface HabitContextType extends HabitState {
     deleteHabit: (id: string) => Promise<void>;
     toggleHabitCompletion: (id: string, dateKey?: string) => Promise<ToggleResult | null>;
     incrementHabitProgress: (id: string, amount: number, dateKey?: string) => Promise<void>;
+    moveHabit: (fromIndex: number, toIndex: number) => Promise<void>;
+    reorderHabits: (habits: Habit[]) => Promise<void>;
     clearLastAction: () => void;
     refreshData: () => Promise<void>;
     resetApp: () => Promise<void>;
@@ -109,6 +112,9 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
         case 'SET_LOADING':
             return { ...state, isLoading: action.payload };
 
+        case 'REORDER_HABITS':
+            return { ...state, habits: action.payload };
+
         case 'CLEAR_LAST_ACTION':
             return { ...state, lastAction: null };
 
@@ -171,6 +177,26 @@ export function HabitProvider({ children }: HabitProviderProps) {
         }
     }, []);
 
+    const moveHabit = useCallback(async (fromIndex: number, toIndex: number): Promise<void> => {
+        if (fromIndex < 0 || fromIndex >= state.habits.length || toIndex < 0 || toIndex >= state.habits.length) {
+            return;
+        }
+        const newHabits = [...state.habits];
+        const [moved] = newHabits.splice(fromIndex, 1);
+        newHabits.splice(toIndex, 0, moved);
+
+        // Optimistic update
+        dispatch({ type: 'REORDER_HABITS', payload: newHabits });
+
+        // Persist
+        await storage.saveHabits(newHabits);
+    }, [state.habits]);
+
+    const reorderHabits = useCallback(async (habits: Habit[]): Promise<void> => {
+        dispatch({ type: 'REORDER_HABITS', payload: habits });
+        await storage.saveHabits(habits);
+    }, []);
+
     const clearLastAction = useCallback((): void => {
         dispatch({ type: 'CLEAR_LAST_ACTION' });
     }, []);
@@ -187,10 +213,12 @@ export function HabitProvider({ children }: HabitProviderProps) {
         deleteHabit,
         toggleHabitCompletion,
         incrementHabitProgress,
+        moveHabit,
+        reorderHabits,
         clearLastAction,
         refreshData: loadData,
         resetApp,
-    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, clearLastAction, loadData, resetApp]);
+    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, clearLastAction, loadData, resetApp]);
 
     return (
         <HabitContext.Provider value={value}>
