@@ -55,7 +55,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     }, [incrementHabitProgress]);
 
     const handleEdit = useCallback((id: string) => {
-        navigation.navigate('EditHabit', { habitId: id });
+        navigation.navigate('HabitDetail', { habitId: id });
     }, [navigation]);
 
     // Handle last action (show confetti, etc.)

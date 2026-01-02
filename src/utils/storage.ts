@@ -185,10 +185,6 @@ export const storage = {
         // Normalize createdAt to start of day for comparison
         const createdAtDate = new Date(habit.createdAt);
         createdAtDate.setHours(0, 0, 0, 0);
-        const createdDateKey = getDateKey(createdAtDate);
-
-        // Prevent toggling for days before the habit was created
-        if (targetDateKey < createdDateKey) return null;
 
         const completions = { ...habit.completions };
         const explicitFailures = { ...(habit.explicitFailures || {}) };
@@ -261,10 +257,6 @@ export const storage = {
         // Normalize createdAt to start of day for comparison
         const createdAtDate = new Date(habit.createdAt);
         createdAtDate.setHours(0, 0, 0, 0);
-        const createdDateKey = getDateKey(createdAtDate);
-
-        // Prevent incrementing for days before the habit was created
-        if (targetDateKey < createdDateKey) return null;
 
         const dailyTarget = habit.dailyTarget || 1;
         const completions = { ...habit.completions };

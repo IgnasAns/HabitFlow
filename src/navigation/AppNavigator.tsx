@@ -11,6 +11,7 @@ import EditHabitScreen from '../screens/EditHabitScreen';
 import StatsScreen from '../screens/StatsScreen';
 import WidgetHub from '../components/WidgetHub';
 import ShareScreen from '../screens/ShareScreen';
+import HabitDetailScreen from '../screens/HabitDetailScreen';
 
 // Navigation types
 export type RootStackParamList = {
@@ -20,6 +21,7 @@ export type RootStackParamList = {
     Stats: undefined;
     WidgetHub: undefined;
     Share: undefined;
+    HabitDetail: { habitId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -104,6 +106,17 @@ export default function AppNavigator() {
                         headerShown: false,
                         presentation: 'modal',
                         animation: 'fade_from_bottom',
+                    }}
+                />
+                <Stack.Screen
+                    name="HabitDetail"
+                    component={HabitDetailScreen}
+                    options={{
+                        headerShown: true,
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                        title: '',
+                        headerTransparent: true,
                     }}
                 />
             </Stack.Navigator>
