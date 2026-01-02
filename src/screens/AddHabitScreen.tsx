@@ -101,12 +101,8 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     active && styles.activeChoice,
                     active && activeColor && {
                         borderColor: activeColor,
+                        borderWidth: 2,
                         backgroundColor: activeColor + '25',
-                        shadowColor: activeColor,
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.6,
-                        shadowRadius: 8,
-                        elevation: 6
                     }
                 ]}
             >

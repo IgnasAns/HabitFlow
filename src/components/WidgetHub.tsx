@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
 import { colors, spacing, borderRadius, typography } from '../theme';
 import { useHabits } from '../context/HabitContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,9 @@ import * as Haptics from 'expo-haptics';
 import { getTodayKey } from '../utils/storage';
 import StyledModal from './StyledModal';
 import ConfettiOverlay from './ConfettiOverlay';
+import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Habit } from '../types';
 
 // Collection of motivational quotes about habits and success
 const MOTIVATIONAL_QUOTES = [
@@ -33,7 +36,7 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 export default function WidgetHub() {
-    const { habits, toggleHabitCompletion, levelInfo, userStats, lastAction, clearLastAction } = useHabits();
+    const { habits, toggleHabitCompletion, levelInfo, userStats, lastAction, clearLastAction, reorderHabits } = useHabits();
     const todayKey = getTodayKey();
 
     // Modal state
@@ -78,164 +81,189 @@ export default function WidgetHub() {
         setModalVisible(true);
     };
 
+    const renderItem = useCallback(({ item: habit, drag, isActive }: RenderItemParams<Habit>) => {
+        const progress = habit.completions[todayKey] || 0;
+        const isComplete = progress >= habit.dailyTarget;
+        const isExplicitlyFailed = habit.explicitFailures?.[todayKey] || false;
+        const themeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
+
+        return (
+            <ScaleDecorator>
+                <TouchableOpacity
+                    key={habit.id}
+                    activeOpacity={0.7}
+                    onLongPress={drag}
+                    delayPressIn={0}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[
+                        styles.quickAction,
+                        { borderColor: themeColor + '30' }, // Always show subtle border
+                        isComplete && { borderColor: themeColor },
+                        isActive && {
+                            zIndex: 100,
+                            opacity: 0.9,
+                            transform: [{ scale: 1.05 }],
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 20,
+                            elevation: 10
+                        }
+                    ]}
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        requestAnimationFrame(() => {
+                            toggleHabitCompletion(habit.id);
+                        });
+                    }}
+                >
+                    <View style={[styles.quickActionIcon, { backgroundColor: themeColor + '20' }]}>
+                        <Text style={styles.quickActionEmoji}>{habit.icon}</Text>
+                    </View>
+                    <View style={styles.quickActionInfo}>
+                        <Text style={styles.quickActionName} numberOfLines={1}>{habit.name}</Text>
+                        <Text style={styles.quickActionProgress}>
+                            {progress}/{habit.dailyTarget} • {habit.streak}🔥
+                        </Text>
+                    </View>
+                    <View style={[
+                        styles.quickActionCheck,
+                        isComplete ? {
+                            backgroundColor: themeColor,
+                            shadowColor: themeColor,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.5,
+                            shadowRadius: 12,
+                            elevation: 10
+                        } : isExplicitlyFailed ? {
+                            backgroundColor: colors.dangerStart || '#EF4444',
+                        } : { borderColor: themeColor + '40', borderWidth: 2 }
+                    ]}>
+                        {isComplete ? (
+                            <Text style={styles.checkMark}>✓</Text>
+                        ) : isExplicitlyFailed ? (
+                            <Text style={[styles.checkMark, { fontSize: 18 }]}>✕</Text>
+                        ) : null}
+                    </View>
+                </TouchableOpacity>
+            </ScaleDecorator>
+        );
+    }, [todayKey, toggleHabitCompletion]);
+
+    const renderHeader = useCallback(() => (
+        <View>
+            {/* Today's Progress */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>TODAY'S PROGRESS</Text>
+                <Pressable
+                    style={styles.progressCard}
+                    onPress={() => showInfo("Today's Progress", `You've completed ${completedToday} out of ${totalHabits} habits today. Keep going!`, '📊')}
+                >
+                    <LinearGradient
+                        colors={completionRate === 100 ? [...colors.success] : [...colors.primary]}
+                        style={styles.progressGradient}
+                    >
+                        <Text style={styles.progressPercent}>{completionRate}%</Text>
+                        <Text style={styles.progressLabel}>{completedToday}/{totalHabits} habits done</Text>
+                        {completionRate === 100 && (
+                            <Text style={styles.perfectDay}>🎉 Perfect Day!</Text>
+                        )}
+                    </LinearGradient>
+                </Pressable>
+            </View>
+
+            {/* Quick Stats Grid */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>QUICK STATS</Text>
+                <View style={styles.statsGrid}>
+                    <Pressable
+                        style={styles.statCard}
+                        onPress={() => showInfo("Level Info", `You're Level ${levelInfo.level}! Earn XP by completing habits. ${levelInfo.xpNeeded - levelInfo.currentXp} XP until next level.`, '⭐')}
+                    >
+                        <Text style={styles.statEmoji}>⭐</Text>
+                        <Text style={styles.statValue}>Level {levelInfo.level}</Text>
+                        <Text style={styles.statLabel}>{userStats.totalXp} XP</Text>
+                    </Pressable>
+
+                    <Pressable
+                        style={styles.statCard}
+                        onPress={() => showInfo("Best Streak", `Your longest current streak is ${bestStreak} days. Keep the momentum going!`, '🔥')}
+                    >
+                        <Text style={styles.statEmoji}>🔥</Text>
+                        <Text style={styles.statValue}>{bestStreak}</Text>
+                        <Text style={styles.statLabel}>Best Streak</Text>
+                    </Pressable>
+
+                    <Pressable
+                        style={styles.statCard}
+                        onPress={() => showInfo("Total Habits", `You're tracking ${totalHabits} habits. Good discipline!`, '📊')}
+                    >
+                        <Text style={styles.statEmoji}>📊</Text>
+                        <Text style={styles.statValue}>{totalHabits}</Text>
+                        <Text style={styles.statLabel}>Habits</Text>
+                    </Pressable>
+
+                    <Pressable
+                        style={styles.statCard}
+                        onPress={() => showInfo("Combined Streaks", `Your combined streak days across all habits: ${totalStreakDays} days!`, '📈')}
+                    >
+                        <Text style={styles.statEmoji}>📈</Text>
+                        <Text style={styles.statValue}>{totalStreakDays}</Text>
+                        <Text style={styles.statLabel}>Total Days</Text>
+                    </Pressable>
+                </View>
+            </View>
+
+            {/* Quick Actions Title */}
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+            </View>
+        </View>
+    ), [completedToday, totalHabits, completionRate, levelInfo, userStats, bestStreak, totalStreakDays]);
+
+    const renderFooter = useCallback(() => (
+        <View>
+            <View style={{ height: spacing.xl }} />
+            {/* Motivational Quote */}
+            <View style={styles.section}>
+                <Pressable
+                    style={styles.quoteCard}
+                    onPress={() => {
+                        Haptics.selectionAsync();
+                        showInfo("Keep Going! 💪", "Every day is a new opportunity to build the life you want. Small actions lead to big changes.", "💪");
+                    }}
+                >
+                    <Text style={styles.quoteText}>"{randomQuote.text}"</Text>
+                    <Text style={styles.quoteAuthor}>— {randomQuote.author}</Text>
+                </Pressable>
+            </View>
+            <View style={{ height: 40 }} />
+        </View>
+    ), [randomQuote]);
+
     return (
-        <>
+        <GestureHandlerRootView style={styles.container}>
             <ConfettiOverlay
                 visible={showConfetti}
                 type={confettiType}
                 onComplete={() => setShowConfetti(false)}
             />
-            <ScrollView
-                style={styles.container}
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="always"
-            >
-                {/* Today's Progress */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>TODAY'S PROGRESS</Text>
-                    <Pressable
-                        style={styles.progressCard}
-                        onPress={() => showInfo("Today's Progress", `You've completed ${completedToday} out of ${totalHabits} habits today. Keep going!`, '📊')}
-                    >
-                        <LinearGradient
-                            colors={completionRate === 100 ? [...colors.success] : [...colors.primary]}
-                            style={styles.progressGradient}
-                        >
-                            <Text style={styles.progressPercent}>{completionRate}%</Text>
-                            <Text style={styles.progressLabel}>{completedToday}/{totalHabits} habits done</Text>
-                            {completionRate === 100 && (
-                                <Text style={styles.perfectDay}>🎉 Perfect Day!</Text>
-                            )}
-                        </LinearGradient>
-                    </Pressable>
-                </View>
-
-                {/* Quick Stats Grid */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>QUICK STATS</Text>
-                    <View style={styles.statsGrid}>
-                        <Pressable
-                            style={styles.statCard}
-                            onPress={() => showInfo("Level Info", `You're Level ${levelInfo.level}! Earn XP by completing habits. ${levelInfo.xpNeeded - levelInfo.currentXp} XP until next level.`, '⭐')}
-                        >
-                            <Text style={styles.statEmoji}>⭐</Text>
-                            <Text style={styles.statValue}>Level {levelInfo.level}</Text>
-                            <Text style={styles.statLabel}>{userStats.totalXp} XP</Text>
-                        </Pressable>
-
-                        <Pressable
-                            style={styles.statCard}
-                            onPress={() => showInfo("Best Streak", `Your longest current streak is ${bestStreak} days. Keep the momentum going!`, '🔥')}
-                        >
-                            <Text style={styles.statEmoji}>🔥</Text>
-                            <Text style={styles.statValue}>{bestStreak}</Text>
-                            <Text style={styles.statLabel}>Best Streak</Text>
-                        </Pressable>
-
-                        <Pressable
-                            style={styles.statCard}
-                            onPress={() => showInfo("Total Habits", `You're tracking ${totalHabits} habits. Good discipline!`, '📊')}
-                        >
-                            <Text style={styles.statEmoji}>📊</Text>
-                            <Text style={styles.statValue}>{totalHabits}</Text>
-                            <Text style={styles.statLabel}>Habits</Text>
-                        </Pressable>
-
-                        <Pressable
-                            style={styles.statCard}
-                            onPress={() => showInfo("Combined Streaks", `Your combined streak days across all habits: ${totalStreakDays} days!`, '📈')}
-                        >
-                            <Text style={styles.statEmoji}>📈</Text>
-                            <Text style={styles.statValue}>{totalStreakDays}</Text>
-                            <Text style={styles.statLabel}>Total Days</Text>
-                        </Pressable>
+            {/* Using key={totalHabits} to force re-render if count changes, simpler than extra refresh control logic */}
+            <DraggableFlatList
+                data={habits}
+                onDragEnd={({ data }) => reorderHabits(data)}
+                keyExtractor={(item) => item.id}
+                renderItem={renderItem}
+                ListHeaderComponent={renderHeader}
+                ListFooterComponent={renderFooter}
+                ListEmptyComponent={
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyText}>No habits yet. Add some habits to see quick actions here!</Text>
                     </View>
-                </View>
-
-                {/* Quick Actions - Mark habits complete */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-                    {habits.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>No habits yet. Add some habits to see quick actions here!</Text>
-                        </View>
-                    ) : (
-                        <View style={styles.quickActions}>
-                            {habits.map(habit => {
-                                const progress = habit.completions[todayKey] || 0;
-                                const isComplete = progress >= habit.dailyTarget;
-                                const isExplicitlyFailed = habit.explicitFailures?.[todayKey] || false;
-                                const themeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
-
-                                return (
-                                    <TouchableOpacity
-                                        key={habit.id}
-                                        activeOpacity={0.7}
-                                        delayPressIn={0}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        style={[
-                                            styles.quickAction,
-                                            { borderColor: themeColor + '30' }, // Always show subtle border
-                                            isComplete && { borderColor: themeColor }
-                                        ]}
-                                        onPress={() => {
-                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                            requestAnimationFrame(() => {
-                                                toggleHabitCompletion(habit.id);
-                                            });
-                                        }}
-                                    >
-                                        <View style={[styles.quickActionIcon, { backgroundColor: themeColor + '20' }]}>
-                                            <Text style={styles.quickActionEmoji}>{habit.icon}</Text>
-                                        </View>
-                                        <View style={styles.quickActionInfo}>
-                                            <Text style={styles.quickActionName} numberOfLines={1}>{habit.name}</Text>
-                                            <Text style={styles.quickActionProgress}>
-                                                {progress}/{habit.dailyTarget} • {habit.streak}🔥
-                                            </Text>
-                                        </View>
-                                        <View style={[
-                                            styles.quickActionCheck,
-                                            isComplete ? {
-                                                backgroundColor: themeColor,
-                                                shadowColor: themeColor,
-                                                shadowOffset: { width: 0, height: 4 },
-                                                shadowOpacity: 0.5,
-                                                shadowRadius: 12,
-                                                elevation: 10
-                                            } : isExplicitlyFailed ? {
-                                                backgroundColor: colors.dangerStart || '#EF4444',
-                                            } : { borderColor: themeColor + '40', borderWidth: 2 }
-                                        ]}>
-                                            {isComplete ? (
-                                                <Text style={styles.checkMark}>✓</Text>
-                                            ) : isExplicitlyFailed ? (
-                                                <Text style={[styles.checkMark, { fontSize: 18 }]}>✕</Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    )}
-                </View>
-
-                {/* Motivational Quote */}
-                <View style={styles.section}>
-                    <Pressable
-                        style={styles.quoteCard}
-                        onPress={() => {
-                            Haptics.selectionAsync();
-                            showInfo("Keep Going! 💪", "Every day is a new opportunity to build the life you want. Small actions lead to big changes.", "💪");
-                        }}
-                    >
-                        <Text style={styles.quoteText}>"{randomQuote.text}"</Text>
-                        <Text style={styles.quoteAuthor}>— {randomQuote.author}</Text>
-                    </Pressable>
-                </View>
-
-                <View style={{ height: 40 }} />
-            </ScrollView >
+                }
+                contentContainerStyle={styles.content}
+                ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+            />
 
             <StyledModal
                 visible={modalVisible}
@@ -244,7 +272,7 @@ export default function WidgetHub() {
                 emoji={modalContent.emoji}
                 onClose={() => setModalVisible(false)}
             />
-        </>
+        </GestureHandlerRootView>
     );
 }
 
@@ -259,11 +287,14 @@ const styles = StyleSheet.create({
     section: {
         marginBottom: spacing.xl,
     },
+    sectionHeader: {
+        marginBottom: spacing.md,
+    },
     sectionTitle: {
         ...typography.small,
         color: colors.textMuted,
         letterSpacing: 1.5,
-        marginBottom: spacing.md,
+        marginBottom: spacing.md, // Default spacing
     },
     progressCard: {
         borderRadius: borderRadius.lg,
@@ -312,9 +343,6 @@ const styles = StyleSheet.create({
     statLabel: {
         ...typography.caption,
         color: colors.textMuted,
-    },
-    quickActions: {
-        gap: spacing.sm,
     },
     quickAction: {
         flexDirection: 'row',
