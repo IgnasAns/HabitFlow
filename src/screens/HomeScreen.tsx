@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -96,6 +96,48 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         );
     }, [handleToggle, handleIncrement, handleEdit]);
 
+    // Memoize header to prevent unnecessary re-renders during interactions/list updates
+    const headerComponent = useMemo(() => (
+        <View style={{ marginBottom: 10 }}>
+            <Animated.View entering={FadeInUp.delay(500)}>
+                <LevelProgress
+                    level={levelInfo.level}
+                    currentXp={levelInfo.currentXp}
+                    xpNeeded={levelInfo.xpNeeded}
+                    totalXp={userStats.totalXp}
+                />
+            </Animated.View>
+        </View>
+    ), [levelInfo, userStats.totalXp]);
+
+    // Memoize empty state
+    const emptyComponent = useMemo(() => (
+        <Animated.View
+            entering={FadeInUp.delay(600)}
+            style={styles.emptyState}
+        >
+            <Text style={styles.emptyIcon}>🎯</Text>
+            <Text style={styles.emptyTitle}>No habits yet</Text>
+            <Text style={styles.emptyText}>
+                Start building better habits today!
+            </Text>
+            <Pressable
+                style={styles.emptyButton}
+                onPress={() => navigation.navigate('AddHabit')}
+            >
+                <LinearGradient
+                    colors={[...colors.primary]}
+                    style={styles.emptyButtonGradient}
+                >
+                    <Text style={styles.emptyButtonText}>Add Your First Habit</Text>
+                </LinearGradient>
+            </Pressable>
+        </Animated.View>
+    ), [navigation]);
+
+    // Memoize footer spacer
+    const footerComponent = useMemo(() => <View style={{ height: 40 }} />, []);
+
     if (isLoading) {
         return (
             <View style={styles.loadingContainer}>
@@ -157,42 +199,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                             tintColor={colors.primaryStart}
                         />
                     }
-                    ListHeaderComponent={
-                        <View style={{ marginBottom: 10 }}>
-                            <Animated.View entering={FadeInUp.delay(500)}>
-                                <LevelProgress
-                                    level={levelInfo.level}
-                                    currentXp={levelInfo.currentXp}
-                                    xpNeeded={levelInfo.xpNeeded}
-                                    totalXp={userStats.totalXp}
-                                />
-                            </Animated.View>
-                        </View>
-                    }
-                    ListEmptyComponent={
-                        <Animated.View
-                            entering={FadeInUp.delay(600)}
-                            style={styles.emptyState}
-                        >
-                            <Text style={styles.emptyIcon}>🎯</Text>
-                            <Text style={styles.emptyTitle}>No habits yet</Text>
-                            <Text style={styles.emptyText}>
-                                Start building better habits today!
-                            </Text>
-                            <Pressable
-                                style={styles.emptyButton}
-                                onPress={() => navigation.navigate('AddHabit')}
-                            >
-                                <LinearGradient
-                                    colors={[...colors.primary]}
-                                    style={styles.emptyButtonGradient}
-                                >
-                                    <Text style={styles.emptyButtonText}>Add Your First Habit</Text>
-                                </LinearGradient>
-                            </Pressable>
-                        </Animated.View>
-                    }
-                    ListFooterComponent={<View style={{ height: 40 }} />}
+                    ListHeaderComponent={headerComponent}
+                    ListEmptyComponent={emptyComponent}
+                    ListFooterComponent={footerComponent}
                 />
             </View>
         </GestureHandlerRootView>

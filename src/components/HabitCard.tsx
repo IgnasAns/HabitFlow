@@ -424,7 +424,7 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
     );
 };
 
-export default HabitCard;
+export default React.memo(HabitCard);
 
 const styles = StyleSheet.create({
     container: {
