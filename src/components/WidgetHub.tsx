@@ -6,7 +6,6 @@ import { useHabits } from '../context/HabitContext';
 import { useI18n } from '../context/I18nContext';
 import { SupportedLanguage } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { getTodayKey } from '../utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -14,7 +13,7 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { scheduleDailyReminder, cancelReminders, registerForPushNotificationsAsync, scheduleTestNotification } from '../utils/notifications';
-import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, updateFeedbackSettings, FeedbackType } from '../utils/feedback';
+import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, updateFeedbackSettings, FeedbackType, ImpactStyle } from '../utils/feedback';
 
 import StyledModal from './StyledModal';
 import ConfirmationModal from './ConfirmationModal';
@@ -228,7 +227,7 @@ export default function WidgetHub() {
             // Trigger positive reinforcement for ANY completion
             if (lastAction.leveledUp) {
                 setConfettiType('levelUp');
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                triggerNotificationHaptic(FeedbackType.Success);
             } else if (lastAction.habit?.streak && lastAction.habit.streak > 0 && lastAction.habit.streak % 7 === 0) {
                 setConfettiType('streak');
                 setShowConfetti(true);
@@ -238,7 +237,7 @@ export default function WidgetHub() {
     }, [lastAction]);
 
     const showInfo = (title: string, message: string, emoji: string = '✨') => {
-        Haptics.selectionAsync();
+        triggerSelectionHaptic();
         setModalContent({ title, message, emoji });
         setModalVisible(true);
     };
@@ -354,7 +353,7 @@ export default function WidgetHub() {
                                     language === lang && styles.languageOptionActive,
                                 ]}
                                 onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    triggerHaptic(ImpactStyle.Light);
                                     setLanguage(lang);
                                 }}
                             >
