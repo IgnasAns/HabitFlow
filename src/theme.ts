@@ -8,27 +8,27 @@ export interface ColorGradient {
 
 export const colors = {
     // Primary - Switched from Purple to Cyan/Teal for a cleaner "Tech" look
-    primary: ['#06B6D4', '#0891B2'] as const, // Cyan
+    primary: ['#06B6D4', '#0891B2'] as [string, string], // Cyan
     primaryStart: '#06B6D4',
     primaryEnd: '#0891B2',
 
     // Success/Completion
-    success: ['#10B981', '#059669'] as const, // Emerald
+    success: ['#10B981', '#059669'] as [string, string], // Emerald
     successStart: '#10B981',
     successEnd: '#059669',
 
     // Streak Fire
-    streak: ['#F59E0B', '#D97706'] as const, // Amber
+    streak: ['#F59E0B', '#D97706'] as [string, string], // Amber
     streakStart: '#F59E0B',
     streakEnd: '#D97706',
 
     // XP/Level Gold
-    gold: ['#FBBF24', '#B45309'] as const,
+    gold: ['#FBBF24', '#B45309'] as [string, string],
     goldStart: '#FBBF24',
     goldEnd: '#B45309',
 
     // Danger/Warning - Harsh Red
-    danger: ['#EF4444', '#B91C1C'] as const,
+    danger: ['#EF4444', '#B91C1C'] as [string, string],
     dangerStart: '#EF4444',
     dangerEnd: '#B91C1C',
 
@@ -58,7 +58,19 @@ export const colors = {
         ['#F97316', '#C2410C'], // Orange
         ['#84CC16', '#4D7C0F'], // Lime
         ['#0EA5E9', '#0284C7'], // Sky
-    ] as const,
+    ] as [string, string][],
+
+    // Pastel variations
+    pastelHabitColors: [
+        ['#A5F3FC', '#67E8F9'], // Cyan
+        ['#A7F3D0', '#6EE7B7'], // Emerald
+        ['#FDE68A', '#FCD34D'], // Amber
+        ['#BFDBFE', '#93C5FD'], // Blue
+        ['#FBCFE8', '#F9A8D4'], // Pink
+        ['#FFEDD5', '#FED7AA'], // Orange
+        ['#ECFCCB', '#D9F99D'], // Lime
+        ['#E0F2FE', '#BAE6FD'], // Sky
+    ] as [string, string][],
 };
 
 export const spacing = {

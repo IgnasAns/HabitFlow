@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeInUp,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
 import { useI18n } from '../context/I18nContext';
@@ -46,7 +47,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiType, setConfettiType] = useState<'completion' | 'levelUp' | 'streak'>('completion');
@@ -251,7 +253,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -271,7 +273,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: spacing.md,
-        paddingTop: 60,
+        paddingTop: Math.max(insets.top, 20) + spacing.sm,
         paddingBottom: spacing.md,
     },
     brandTitle: {

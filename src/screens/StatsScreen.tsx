@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useHabits } from '../context/HabitContext';
 import { useI18n } from '../context/I18nContext';
@@ -28,16 +29,22 @@ export default function StatsScreen({ navigation }: any) {
     const { userStats, habits, levelInfo } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
     const { width: screenWidth } = useWindowDimensions();
     const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('week');
 
+    const today = useMemo(() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }, []);
+
     // Helper to get date range for period
     const getDateRange = useCallback((period: TimePeriod) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         let startDate: Date;
+        let endDate = new Date(today);
 
         switch (period) {
             case 'week':
@@ -45,15 +52,19 @@ export default function StatsScreen({ navigation }: any) {
                 startDate.setDate(today.getDate() - 6);
                 return { start: startDate, end: today, days: 7 };
             case 'month':
-                startDate = new Date(today);
-                startDate.setDate(today.getDate() - 29);
-                return { start: startDate, end: today, days: 30 };
+                // Current calendar month
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                return { start: startDate, end: endDate, days: endDate.getDate() };
             case 'year':
-                startDate = new Date(today);
-                startDate.setFullYear(today.getFullYear() - 1);
-                return { start: startDate, end: today, days: 365 };
+                // Current calendar year
+                startDate = new Date(today.getFullYear(), 0, 1);
+                endDate = new Date(today.getFullYear(), 11, 31);
+                const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                return { start: startDate, end: endDate, days: diffDays };
         }
-    }, []);
+    }, [today]);
 
     // Calculate detailed stats for selected period
     const periodStats = useMemo(() => {
@@ -87,7 +98,8 @@ export default function StatsScreen({ navigation }: any) {
             });
         }
 
-        const totalPossible = dayData.reduce((sum, d) => sum + d.total, 0);
+        const pastAndTodayData = dayData.filter(d => d.date <= today);
+        const totalPossible = pastAndTodayData.reduce((sum, d) => sum + d.total, 0);
         const totalCompleted = dayData.reduce((sum, d) => sum + d.completed, 0);
         const completionRate = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
 
@@ -103,8 +115,12 @@ export default function StatsScreen({ navigation }: any) {
         // Active days (at least one completion)
         const activeDays = dayData.filter(d => d.completed > 0).length;
 
-        // Daily average
-        const dailyAvg = days > 0 ? Math.round(totalCompleted / days * 10) / 10 : 0;
+        // Daily average (only count days up to today)
+        const elapsedDays = pastAndTodayData.length;
+        const dailyAvg = elapsedDays > 0 ? Math.round(totalCompleted / elapsedDays * 10) / 10 : 0;
+
+        const monthOffset = selectedPeriod === 'month' ? (new Date(today.getFullYear(), today.getMonth(), 1).getDay() + 6) % 7 : 0;
+        const yearOffset = selectedPeriod === 'year' ? (new Date(today.getFullYear(), 0, 1).getDay() + 6) % 7 : 0;
 
         return {
             dayData,
@@ -116,8 +132,10 @@ export default function StatsScreen({ navigation }: any) {
             activeDays,
             dailyAvg,
             days,
+            monthOffset,
+            yearOffset
         };
-    }, [habits, selectedPeriod, getDateRange, t]);
+    }, [habits, selectedPeriod, getDateRange, t, today]);
 
     // Weekly view data (for week period)
     const weekData = useMemo(() => {
@@ -152,6 +170,15 @@ export default function StatsScreen({ navigation }: any) {
         year: t.common.year,
     };
 
+    const monthNames = [
+        t.calendar.januaryShort, t.calendar.februaryShort, t.calendar.marchShort,
+        t.calendar.aprilShort, t.calendar.mayShort, t.calendar.juneShort,
+        t.calendar.julyShort, t.calendar.augustShort, t.calendar.septemberShort,
+        t.calendar.octoberShort, t.calendar.novemberShort, t.calendar.decemberShort
+    ];
+    const currentMonthLabel = monthNames[today.getMonth()];
+    const currentYearLabel = today.getFullYear().toString();
+
     return (
         <ScrollView
             style={styles.container}
@@ -163,8 +190,19 @@ export default function StatsScreen({ navigation }: any) {
                 entering={FadeInDown.delay(100)}
                 style={styles.header}
             >
-                <Text style={styles.title}>{t.stats.title}</Text>
-                <Text style={styles.subtitle}>{t.stats.overview}</Text>
+                <View style={styles.headerMain}>
+                    <Pressable
+                        onPress={() => navigation.navigate('Home')}
+                        style={styles.backButton}
+                        hitSlop={20}
+                    >
+                        <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+                    </Pressable>
+                    <View style={styles.headerTitles}>
+                        <Text style={styles.title}>{t.stats.title}</Text>
+                        <Text style={styles.subtitle}>{t.stats.overview}</Text>
+                    </View>
+                </View>
             </Animated.View>
 
             {/* Level Progress */}
@@ -316,11 +354,15 @@ export default function StatsScreen({ navigation }: any) {
                     entering={FadeIn.duration(300)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>30-Day Grid</Text>
+                    <Text style={styles.sectionTitle}>{currentMonthLabel} {t.stats.overview}</Text>
                     <View style={styles.monthGrid}>
-                        {periodStats.dayData.map((day, index) => {
+                        {Array.from({ length: periodStats.monthOffset || 0 }).map((_, i) => (
+                            <View key={`spacer-${i}`} style={[styles.monthCell, { backgroundColor: 'transparent' }]} />
+                        ))}
+                        {periodStats.dayData.map((day) => {
                             const rate = day.total > 0 ? day.completed / day.total : 0;
-                            const isToday = index === periodStats.dayData.length - 1;
+                            const isToday = day.key === getDateKey(today);
+                            const isFuture = day.date > today;
 
                             return (
                                 <View
@@ -333,6 +375,7 @@ export default function StatsScreen({ navigation }: any) {
                                         },
                                         rate === 1 && { backgroundColor: colors.successStart },
                                         isToday && styles.monthCellToday,
+                                        isFuture && { opacity: 0.15 },
                                     ]}
                                 />
                             );
@@ -341,15 +384,15 @@ export default function StatsScreen({ navigation }: any) {
                     <View style={styles.legendRow}>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-                            <Text style={styles.legendText}>No progress</Text>
+                            <Text style={styles.legendText}>{t.stats.noProgress}</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: colors.primaryStart, opacity: 0.6 }]} />
-                            <Text style={styles.legendText}>Partial</Text>
+                            <Text style={styles.legendText}>{t.stats.partial}</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: colors.successStart }]} />
-                            <Text style={styles.legendText}>Complete</Text>
+                            <Text style={styles.legendText}>{t.stats.complete}</Text>
                         </View>
                     </View>
                 </Animated.View>
@@ -361,11 +404,15 @@ export default function StatsScreen({ navigation }: any) {
                     entering={FadeIn.duration(300)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>365-Day Grid</Text>
+                    <Text style={styles.sectionTitle}>{currentYearLabel} {t.stats.overview}</Text>
                     <View style={styles.yearGrid}>
-                        {periodStats.dayData.map((day, index) => {
+                        {Array.from({ length: periodStats.yearOffset || 0 }).map((_, i) => (
+                            <View key={`spacer-${i}`} style={[styles.yearCell, { backgroundColor: 'transparent' }]} />
+                        ))}
+                        {periodStats.dayData.map((day) => {
                             const rate = day.total > 0 ? day.completed / day.total : 0;
-                            const isToday = index === periodStats.dayData.length - 1;
+                            const isToday = day.key === getDateKey(today);
+                            const isFuture = day.date > today;
 
                             return (
                                 <View
@@ -378,6 +425,7 @@ export default function StatsScreen({ navigation }: any) {
                                         },
                                         rate === 1 && { backgroundColor: colors.successStart },
                                         isToday && styles.yearCellToday,
+                                        isFuture && { opacity: 0.15 },
                                     ]}
                                 />
                             );
@@ -386,15 +434,15 @@ export default function StatsScreen({ navigation }: any) {
                     <View style={styles.legendRow}>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-                            <Text style={styles.legendText}>No progress</Text>
+                            <Text style={styles.legendText}>{t.stats.noProgress}</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: colors.primaryStart, opacity: 0.6 }]} />
-                            <Text style={styles.legendText}>Partial</Text>
+                            <Text style={styles.legendText}>{t.stats.partial}</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendDot, { backgroundColor: colors.successStart }]} />
-                            <Text style={styles.legendText}>Complete</Text>
+                            <Text style={styles.legendText}>{t.stats.complete}</Text>
                         </View>
                     </View>
                 </Animated.View>
@@ -454,25 +502,33 @@ export default function StatsScreen({ navigation }: any) {
             )}
 
             {/* Bottom spacing */}
-
-            {/* Bottom spacing */}
             <View style={{ height: spacing.xxl }} />
         </ScrollView>
     );
 }
 
-
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
     },
     scrollContent: {
         padding: spacing.md,
-        paddingTop: spacing.xl,
+        paddingTop: Math.max(insets.top, 20) + spacing.sm,
     },
     header: {
         marginBottom: spacing.lg,
+    },
+    headerMain: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    headerTitles: {
+        flex: 1,
+    },
+    backButton: {
+        marginLeft: -spacing.xs,
     },
     title: {
         ...typography.h1,
@@ -636,7 +692,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-    // Period selector styles
     periodSelector: {
         flexDirection: 'row',
         backgroundColor: colors.glass,
@@ -663,7 +718,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     periodTabTextActive: {
         color: colors.textPrimary,
     },
-    // Period stats card styles
     periodStatsCard: {
         marginTop: spacing.lg,
         backgroundColor: colors.glass,
@@ -695,7 +749,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         color: colors.textMuted,
         marginTop: 4,
     },
-    // Month grid styles - 7 cells per row (weekly view)
     monthGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -706,7 +759,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         borderRadius: borderRadius.md,
     },
     monthCell: {
-        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 6 * 7) / 7, // 7 cells per row
+        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 6 * 7) / 7,
         aspectRatio: 1,
         borderRadius: 4,
         backgroundColor: 'rgba(255,255,255,0.06)',
@@ -715,7 +768,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primaryStart,
     },
-    // Legend styles
     legendRow: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -736,7 +788,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         ...typography.caption,
         color: colors.textMuted,
     },
-    // Year grid styles (365 days) - 15 cells per row
     yearGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -747,7 +798,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         borderRadius: borderRadius.md,
     },
     yearCell: {
-        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 3 * 15) / 15, // 15 cells per row
+        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 3 * 15) / 15,
         aspectRatio: 1,
         borderRadius: 2,
         backgroundColor: 'rgba(255,255,255,0.06)',

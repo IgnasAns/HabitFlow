@@ -4,9 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, typography, borderRadius, shadows } from '../theme';
 import { useHabits } from '../context/HabitContext';
-import { useI18n } from '../context/I18nContext';
+import { useI18n, interpolate } from '../context/I18nContext';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -19,7 +20,8 @@ export default function ShareScreen({ navigation }: any) {
     const { habits, levelInfo, userStats } = useHabits();
     const { t, language } = useI18n();
     const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
     const todayKey = getTodayKey();
     // Dynamic locale for date
     const localeMap: Record<string, string> = {
@@ -63,7 +65,7 @@ export default function ShareScreen({ navigation }: any) {
                         {/* Stats Summary */}
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
-                                <Text style={styles.statValue}>Lvl {levelInfo.level}</Text>
+                                <Text style={styles.statValue}>{interpolate(t.settings.level, { level: levelInfo.level })}</Text>
                                 <Text style={styles.statLabel}>{t.share.currentLevel}</Text>
                             </View>
                             <View style={styles.statDivider} />
@@ -171,9 +173,9 @@ export default function ShareScreen({ navigation }: any) {
             {/* Back Button (Top Left) */}
             <Pressable
                 style={styles.closeButton}
-                onPress={() => navigation.goBack()}
+                onPress={() => navigation.navigate('Home')}
             >
-                <Ionicons name="close" size={24} color={colors.textPrimary} />
+                <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
             </Pressable>
 
             {/* Share Button (Top Right) */}
@@ -188,7 +190,7 @@ export default function ShareScreen({ navigation }: any) {
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -323,7 +325,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     closeButton: {
         position: 'absolute',
-        top: 50,
+        top: Math.max(insets.top, 20) + spacing.sm,
         left: 20, // Moved to left
         width: 40,
         height: 40,
@@ -335,7 +337,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     shareButton: {
         position: 'absolute',
-        top: 50,
+        top: Math.max(insets.top, 20) + spacing.sm,
         right: 20, // Moved to right
         width: 40,
         height: 40,

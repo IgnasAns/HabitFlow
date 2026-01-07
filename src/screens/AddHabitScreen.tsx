@@ -17,6 +17,8 @@ import Animated, {
     useSharedValue,
     Layout,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
 import { useI18n } from '../context/I18nContext';
@@ -30,7 +32,8 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
     const { addHabit } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -112,6 +115,33 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
         );
     };
 
+    // Helper to get the last "visual" character (handles emojis with variation selectors/ZWJ)
+    const getLastGrapheme = (text: string) => {
+        if (!text) return '';
+
+        // Use Intl.Segmenter if available (modern Hermes)
+        if (typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+            try {
+                const segmenter = new (Intl as any).Segmenter('en', { granularity: 'grapheme' });
+                const segments = Array.from(segmenter.segment(text));
+                if (segments.length > 0) {
+                    return (segments[segments.length - 1] as any).segment;
+                }
+            } catch (e) { }
+        }
+
+        // Fallback: Smart splitting for complex symbols like VS16 (❤️)
+        const chars = Array.from(text);
+        if (chars.length === 0) return '';
+        let last = chars[chars.length - 1];
+        if ((last === '\ufe0f' || last === '\ufe0e') && chars.length >= 2) {
+            return chars[chars.length - 2] + last;
+        }
+        return last;
+    };
+
+    const isCustomIcon = !habitIcons.includes(selectedIcon as any);
+
     return (
         <KeyboardAvoidingView
             style={styles.container}
@@ -123,15 +153,22 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="always"
             >
-                {/* Drag Handle for Modal Feel */}
-                <View style={styles.dragHandleContainer}>
-                    <View style={styles.dragHandle} />
-                </View>
 
-                {/* Header */}
+
                 <View style={styles.header}>
-                    <Text style={styles.title}>{t.nav.addHabit}</Text>
-                    <Text style={styles.subtitle}>{t.home.startBuilding}</Text>
+                    <View style={styles.headerMain}>
+                        <Pressable
+                            onPress={() => navigation.navigate('Home')}
+                            style={styles.backButton}
+                            hitSlop={20}
+                        >
+                            <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+                        </Pressable>
+                        <View style={styles.headerTitles}>
+                            <Text style={styles.title}>{t.nav.addHabit}</Text>
+                            <Text style={styles.subtitle}>{t.home.startBuilding}</Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Name Input */}
@@ -170,7 +207,14 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                     entering={FadeInDown.delay(300)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>{t.habit.icon}</Text>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>{t.habit.icon}</Text>
+                        {isCustomIcon && (
+                            <View style={styles.customBadge}>
+                                <Text style={styles.customBadgeText}>{t.habit.custom}</Text>
+                            </View>
+                        )}
+                    </View>
                     <View style={styles.iconGrid}>
                         {habitIcons.map((icon, index) => (
                             <ChoiceButton
@@ -186,6 +230,36 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                                 <Text style={styles.iconText}>{icon}</Text>
                             </ChoiceButton>
                         ))}
+                    </View>
+
+                    {/* New Distinct Custom Icon Input Container */}
+                    <View style={styles.customIconContainer}>
+                        <Text style={styles.customIconPrompt}>{t.habit.customIcon}</Text>
+                        <View style={[
+                            styles.customIconInputBox,
+                            isCustomIcon && {
+                                borderColor: activeThemeColor,
+                                backgroundColor: activeThemeColor + '15'
+                            }
+                        ]}>
+                            <TextInput
+                                style={[styles.iconText, styles.customTextInput]}
+                                value={isCustomIcon ? selectedIcon : ''}
+                                onChangeText={(text) => {
+                                    if (text.length > 0) {
+                                        const icon = getLastGrapheme(text);
+                                        setSelectedIcon(icon);
+                                        triggerSelectionHaptic();
+                                    } else {
+                                        setSelectedIcon('💪');
+                                    }
+                                }}
+                                placeholder={t.habit.customIconPlaceholder}
+                                placeholderTextColor={colors.textMuted}
+                                maxLength={10}
+                            />
+                            {!isCustomIcon && <Ionicons name="add-circle-outline" size={20} color={colors.textMuted} />}
+                        </View>
                     </View>
                 </Animated.View>
 
@@ -205,12 +279,6 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                                 hitSlop={8}
                                 onPress={() => {
                                     triggerSelectionHaptic();
-                                    // Select 0th index color (New Primary Cyan) as default, or any logic
-                                    // But here we select indices.
-                                    // Let's keep existing logic but ensure colors are from context if needed.
-                                    // Actually, colors.habitColors is constant in theme,
-                                    // but we might want them to adapt?
-                                    // For now, habit colors are likely static.
                                     setSelectedColor(index);
                                 }}
                             >
@@ -356,7 +424,7 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -366,7 +434,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     scrollContent: {
         padding: spacing.md,
-        paddingTop: spacing.lg,
+        paddingTop: Math.max(insets.top, 20) + spacing.sm,
     },
     dragHandleContainer: {
         alignItems: 'center',
@@ -381,7 +449,17 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     header: {
         marginBottom: spacing.lg,
+    },
+    headerMain: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: spacing.sm,
+    },
+    headerTitles: {
+        flex: 1,
+    },
+    backButton: {
+        marginLeft: -spacing.xs,
     },
     title: {
         ...typography.h1,
@@ -395,13 +473,30 @@ const getStyles = (colors: any) => StyleSheet.create({
     section: {
         marginBottom: spacing.lg,
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.sm,
+    },
     sectionTitle: {
         ...typography.bodyBold,
         color: colors.textSecondary,
-        marginBottom: spacing.sm,
         textTransform: 'uppercase',
         letterSpacing: 1,
         fontSize: 12,
+    },
+    customBadge: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    customBadgeText: {
+        ...typography.small,
+        color: colors.textSecondary,
+        fontSize: 10,
+        textTransform: 'uppercase',
     },
     inputContainer: {
         flexDirection: 'row',
@@ -443,6 +538,30 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     iconText: {
         fontSize: 24,
+    },
+    customIconContainer: {
+        marginTop: spacing.md,
+    },
+    customIconPrompt: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.xs,
+    },
+    customIconInputBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        paddingHorizontal: spacing.md,
+        height: 56,
+    },
+    customTextInput: {
+        flex: 1,
+        ...typography.body,
+        color: colors.textPrimary,
+        fontSize: 18,
     },
     colorGrid: {
         flexDirection: 'row',

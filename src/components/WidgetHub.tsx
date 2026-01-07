@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
-import { useI18n } from '../context/I18nContext';
+import { useI18n, interpolate } from '../context/I18nContext';
 import { SupportedLanguage } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getTodayKey } from '../utils/storage';
@@ -23,11 +24,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function WidgetHub() {
+export default function WidgetHub({ navigation }: any) {
     const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData } = useHabits();
     const { t, language, setLanguage, languageNames, languageFlags, supportedLanguages } = useI18n();
-    const { colors, toggleTheme, theme } = useTheme();
+    const { colors, toggleTheme, theme, colorMode, toggleColorMode } = useTheme();
     const todayKey = getTodayKey();
+    const insets = useSafeAreaInsets();
     // Use local state for options
     const [smartReminders, setSmartReminders] = useState(false);
     const [hapticsEnabled, setHapticsEnabled] = useState(true);
@@ -43,7 +45,7 @@ export default function WidgetHub() {
                     setSmartReminders(parsed.smartReminders ?? false);
                     setHapticsEnabled(parsed.hapticsEnabled ?? true);
                     setSoundEnabled(parsed.soundEnabled ?? true);
-                    // Theme handled by ThemeProvider
+                    // Theme and colorMode handled by ThemeProvider
                 }
             } catch (e) {
                 // error loading
@@ -54,7 +56,7 @@ export default function WidgetHub() {
 
     const saveSettings = async (updates: any) => {
         try {
-            const currentMatrix = { smartReminders, hapticsEnabled, soundEnabled, darkMode: theme === 'dark' };
+            const currentMatrix = { smartReminders, hapticsEnabled, soundEnabled, darkMode: theme === 'dark', colorMode };
             const newSettings = { ...currentMatrix, ...updates };
             await AsyncStorage.setItem('app_settings', JSON.stringify(newSettings));
         } catch (e) {
@@ -73,12 +75,12 @@ export default function WidgetHub() {
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
                             scheduleDailyReminder();
-                            showInfo("Reminders Set", "You'll be reminded daily at 8 PM to check your habits.", "✅");
+                            showInfo(t.settings.remindersSet, t.settings.remindersMessage, "✅");
                         } else {
                             // Permission denied or error
                             setSmartReminders(false); // Revert switch if failed
                             saveSettings({ smartReminders: false });
-                            showInfo("Permission Required", "Please enable notifications in settings to use Smart Reminders.", "🚫");
+                            showInfo(t.settings.permissionRequired, t.settings.permissionMessage, "🚫");
                         }
                     });
                 } else {
@@ -105,6 +107,10 @@ export default function WidgetHub() {
                 toggleTheme();
                 saveSettings({ darkMode: theme !== 'dark' });
                 break;
+            case 'colorMode':
+                toggleColorMode();
+                saveSettings({ colorMode: colorMode === 'vivid' ? 'pastel' : 'vivid' });
+                break;
         }
     };
 
@@ -126,17 +132,17 @@ export default function WidgetHub() {
 
                 if (success) {
                     triggerNotificationHaptic(FeedbackType.Success);
-                    showInfo("Import Successful", "Your data has been restored.", "💾");
+                    showInfo(t.settings.importSuccess, t.settings.importSuccessDesc, "💾");
                 } else {
                     throw new Error("Invalid data format");
                 }
             } catch (e) {
                 triggerNotificationHaptic(FeedbackType.Error);
-                showInfo("Import Failed", "The selected file is not a valid backup.", "⚠️");
+                showInfo(t.settings.importFailed, t.settings.importFailedDesc, "⚠️");
             }
         } catch (error) {
             console.error(error);
-            showInfo("Import Failed", "Could not read the file.", "📂");
+            showInfo(t.settings.importFailed, t.settings.importReadError, "📂");
         }
     };
 
@@ -214,7 +220,7 @@ export default function WidgetHub() {
             };
             await Share.share({
                 message: JSON.stringify(data, null, 2),
-                title: 'HabitFlow Data Export'
+                title: t.settings.exportTitle
             });
         } catch (error) {
             // Ignore
@@ -243,43 +249,52 @@ export default function WidgetHub() {
     };
 
 
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
     const renderHeader = useCallback(() => (
         <View>
             {/* Screen Title */}
             <View style={styles.screenHeader}>
-                <Text style={styles.screenTitle}>{t.settings.title}</Text>
+                <View style={styles.headerMain}>
+                    <Pressable
+                        onPress={() => navigation?.navigate('Home')}
+                        style={styles.backButton}
+                        hitSlop={20}
+                    >
+                        <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+                    </Pressable>
+                    <Text style={styles.screenTitle}>{t.settings.title}</Text>
+                </View>
             </View>
 
             {/* Momentum / Stats */}
             <View style={styles.section}>
                 <View style={styles.statBig}>
                     <Text style={styles.statBigValue}>{consistencyScore}%</Text>
-                    <Text style={styles.statBigLabel}>Consistency Score (Last 30 Days)</Text>
+                    <Text style={styles.statBigLabel}>{t.settings.consistencyScore} ({t.settings.last30Days})</Text>
                 </View>
             </View>
 
         </View>
-    ), [consistencyScore, t, styles]);
+    ), [consistencyScore, t, styles, navigation, colors]);
 
     const renderFooter = useCallback(() => (
         <View>
             {/* Level Info (Low Priority) */}
             <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
                 <Text style={{ ...typography.caption, color: colors.textMuted }}>
-                    Level {levelInfo.level} • {userStats.totalXp} XP
+                    {interpolate(t.settings.level, { level: levelInfo.level })} • {userStats.totalXp} XP
                 </Text>
             </View>
 
             {/* App Settings */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>APP EXPERIENCE</Text>
+                <Text style={styles.sectionTitle}>{t.settings.appExperience}</Text>
 
                 <View style={styles.settingRow}>
                     <View style={styles.settingInfo}>
-                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔔</Text>  Smart Reminders</Text>
-                        <Text style={styles.settingDesc}>Get reminded when you forget</Text>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔔</Text>  {t.settings.smartReminders}</Text>
+                        <Text style={styles.settingDesc}>{t.settings.smartRemindersDesc}</Text>
                     </View>
                     <Switch
                         value={smartReminders}
@@ -299,13 +314,13 @@ export default function WidgetHub() {
                             setShowTestModal(true);
                         }}
                     >
-                        <Text style={[styles.exportButtonText, { fontSize: 12, color: colors.textSecondary }]}>Test Notification (5s)</Text>
+                        <Text style={[styles.exportButtonText, { fontSize: 12, color: colors.textSecondary }]}>{t.settings.testNotification}</Text>
                     </TouchableOpacity>
                 )}
 
                 <View style={styles.settingRow}>
                     <View style={styles.settingInfo}>
-                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>📳</Text>  Haptic Feedback</Text>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>📳</Text>  {t.settings.hapticFeedback}</Text>
                     </View>
                     <Switch
                         value={hapticsEnabled}
@@ -317,7 +332,7 @@ export default function WidgetHub() {
 
                 <View style={styles.settingRow}>
                     <View style={styles.settingInfo}>
-                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔊</Text>  Sound Effects</Text>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔊</Text>  {t.settings.soundEffects}</Text>
                     </View>
                     <Switch
                         value={soundEnabled}
@@ -329,11 +344,24 @@ export default function WidgetHub() {
 
                 <View style={styles.settingRow}>
                     <View style={styles.settingInfo}>
-                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🌓</Text>  Dark Mode</Text>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🌓</Text>  {t.settings.darkMode}</Text>
                     </View>
                     <Switch
                         value={theme === 'dark'}
                         onValueChange={() => toggleSetting('theme')}
+                        trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                        thumbColor={'#fff'}
+                    />
+                </View>
+
+                <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🎨</Text>  {t.settings.pastelMode}</Text>
+                        <Text style={styles.settingDesc}>{t.settings.pastelModeDesc}</Text>
+                    </View>
+                    <Switch
+                        value={colorMode === 'pastel'}
+                        onValueChange={() => toggleSetting('colorMode')}
                         trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
                         thumbColor={'#fff'}
                     />
@@ -372,14 +400,14 @@ export default function WidgetHub() {
 
             {/* Data Export & Reset */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>DATA & PRIVACY</Text>
+                <Text style={styles.sectionTitle}>{t.settings.dataPrivacy}</Text>
 
                 <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
-                    <Text style={styles.exportButtonText}>Download Your Data (JSON)</Text>
+                    <Text style={styles.exportButtonText}>{t.settings.downloadData}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleImport}>
-                    <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>Import Data (JSON)</Text>
+                    <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>{t.settings.importData}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -395,7 +423,7 @@ export default function WidgetHub() {
             </View>
             <View style={{ height: 80 }} />
         </View>
-    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, hapticsEnabled, soundEnabled, theme]);
+    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, hapticsEnabled, soundEnabled, theme, colorMode]);
 
     return (
         <GestureHandlerRootView style={styles.container}>
@@ -427,11 +455,11 @@ export default function WidgetHub() {
 
             <StyledModal
                 visible={showTestModal}
-                title="Test Sent"
-                message={"Notification scheduled for 5 seconds from now.\n\nPlease close the app (go to home screen) to see it."}
+                title={t.settings.testSent}
+                message={t.settings.notificationScheduled}
                 emoji="🔔"
                 onClose={() => setShowTestModal(false)}
-                buttonText="Okay"
+                buttonText={t.common.okay}
             />
 
             <ConfirmationModal
@@ -452,18 +480,25 @@ export default function WidgetHub() {
     );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
     },
     content: {
         padding: spacing.md,
+        paddingTop: Math.max(insets.top, 20) + spacing.sm,
     },
     screenHeader: {
-        paddingTop: 50,
         paddingBottom: spacing.lg,
+    },
+    headerMain: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: spacing.sm,
+    },
+    backButton: {
+        marginLeft: -spacing.xs,
     },
     screenTitle: {
         ...typography.h1,

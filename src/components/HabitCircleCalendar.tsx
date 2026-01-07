@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import { getDateKey } from '../utils/storage';
+import { useI18n, interpolate } from '../context/I18nContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAYS_TO_SHOW = 28; // 4 weeks
@@ -91,6 +92,7 @@ const HabitCircleCalendar = memo(({
     daysToShow = DAYS_TO_SHOW,
 }: HabitCircleCalendarProps) => {
     const { colors } = useTheme();
+    const { t } = useI18n();
     const styles = useMemo(() => getStyles(colors), [colors]);
 
     const days = useMemo(() => {
@@ -136,13 +138,21 @@ const HabitCircleCalendar = memo(({
         return result;
     }, [days]);
 
-    // Get week day labels
-    const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    // Get week day labels from translations
+    const dayLabels = useMemo(() => [
+        t.calendar.sunday.charAt(0).toUpperCase(),
+        t.calendar.monday.charAt(0).toUpperCase(),
+        t.calendar.tuesday.charAt(0).toUpperCase(),
+        t.calendar.wednesday.charAt(0).toUpperCase(),
+        t.calendar.thursday.charAt(0).toUpperCase(),
+        t.calendar.friday.charAt(0).toUpperCase(),
+        t.calendar.saturday.charAt(0).toUpperCase(),
+    ], [t]);
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Last {daysToShow} Days</Text>
+                <Text style={styles.title}>{interpolate(t.calendar.lastDays, { days: daysToShow })}</Text>
                 <View style={styles.statsContainer}>
                     <Text style={styles.statsText}>{stats.completed}/{stats.total}</Text>
                     <View style={[styles.statsBadge, { backgroundColor: gradientColors[0] + '30' }]}>
@@ -189,20 +199,20 @@ const HabitCircleCalendar = memo(({
             <View style={styles.legend}>
                 <View style={styles.legendItem}>
                     <View style={[styles.legendCircle, styles.circleEmpty]} />
-                    <Text style={styles.legendText}>Missed</Text>
+                    <Text style={styles.legendText}>{t.calendar.missed}</Text>
                 </View>
                 <View style={styles.legendItem}>
                     <LinearGradient
                         colors={[...gradientColors]}
                         style={[styles.legendCircle]}
                     />
-                    <Text style={styles.legendText}>Done</Text>
+                    <Text style={styles.legendText}>{t.calendar.done}</Text>
                 </View>
                 <View style={styles.legendItem}>
                     <View style={[styles.legendCircle, styles.circleTodayLegend]}>
                         <View style={[styles.todayDotLegend, { backgroundColor: gradientColors[0] }]} />
                     </View>
-                    <Text style={styles.legendText}>Today</Text>
+                    <Text style={styles.legendText}>{t.calendar.today}</Text>
                 </View>
             </View>
         </View>

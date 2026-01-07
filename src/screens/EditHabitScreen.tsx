@@ -10,6 +10,8 @@ import {
     Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
     FadeInDown,
     useAnimatedStyle,
@@ -19,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType, ImpactStyle } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
-import { useI18n } from '../context/I18nContext';
+import { useI18n, interpolate } from '../context/I18nContext';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography, habitIcons } from '../theme';
 import StreakBadge from '../components/StreakBadge';
@@ -40,7 +42,8 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
     const { habits, updateHabit, deleteHabit } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
-    const styles = useMemo(() => getStyles(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
     const habit = habits.find(h => h.id === habitId);
 
@@ -51,6 +54,8 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
     const [dailyTarget, setDailyTarget] = useState(habit?.dailyTarget?.toString() || '1');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [completions, setCompletions] = useState(habit?.completions || {});
+
+    const activeThemeColor = colors.habitColors[selectedColor]?.[0] || colors.primaryStart;
 
     const buttonScale = useSharedValue(1);
     const deleteScale = useSharedValue(1);
@@ -105,7 +110,7 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
     }));
 
     // For picker micro-interactions
-    const ChoiceButton = ({ onPress, active, children, style }: any) => {
+    const ChoiceButton = ({ onPress, active, children, style, activeColor }: any) => {
         const scale = useSharedValue(1);
         const choiceStyle = useAnimatedStyle(() => ({
             transform: [{ scale: scale.value }],
@@ -124,12 +129,44 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                 onPress={onPress}
                 onPressIn={handleIn}
                 onPressOut={handleOut}
-                style={[style, choiceStyle, active && styles.activeChoice]}
+                style={[
+                    style,
+                    choiceStyle,
+                    active && styles.activeChoice,
+                    active && activeColor && {
+                        borderColor: activeColor,
+                        borderWidth: 2,
+                        backgroundColor: activeColor + '25',
+                    }
+                ]}
             >
                 {children}
             </AnimatedPressable>
         );
     };
+
+    // Helper to get the last "visual" character (handles emojis with variation selectors/ZWJ)
+    const getLastGrapheme = (text: string) => {
+        if (!text) return '';
+        if (typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+            try {
+                const segmenter = new (Intl as any).Segmenter('en', { granularity: 'grapheme' });
+                const segments = Array.from(segmenter.segment(text));
+                if (segments.length > 0) {
+                    return (segments[segments.length - 1] as any).segment;
+                }
+            } catch (e) { }
+        }
+        const chars = Array.from(text);
+        if (chars.length === 0) return '';
+        let last = chars[chars.length - 1];
+        if ((last === '\ufe0f' || last === '\ufe0e') && chars.length >= 2) {
+            return chars[chars.length - 2] + last;
+        }
+        return last;
+    };
+
+    const isCustomIcon = !habitIcons.includes(selectedIcon as any);
 
     return (
         <KeyboardAvoidingView
@@ -142,19 +179,29 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="always"
             >
-                {/* Drag Handle */}
-                <View style={styles.dragHandleContainer}>
-                    <View style={styles.dragHandle} />
-                </View>
+
 
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>Edit Habit</Text>
-                    <View style={styles.statsRow}>
-                        <StreakBadge streak={habit.streak} size="medium" />
-                        <Text style={styles.statsText}>
-                            {Object.keys(habit.completions).filter(k => habit.completions[k] >= habit.dailyTarget).length} completions
-                        </Text>
+                    <View style={styles.headerMain}>
+                        <Pressable
+                            onPress={() => navigation.navigate('Home')}
+                            style={styles.backButton}
+                            hitSlop={20}
+                        >
+                            <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
+                        </Pressable>
+                        <View style={styles.headerTitleGroup}>
+                            <Text style={styles.title}>{t.nav.editHabit}</Text>
+                            <View style={styles.statsRow}>
+                                <StreakBadge streak={habit.streak} size="medium" />
+                                <Text style={styles.statsText}>
+                                    {interpolate(t.stats.completionsCount, {
+                                        count: Object.keys(habit.completions).filter(k => habit.completions[k] >= (habit.dailyTarget || 1)).length
+                                    })}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
                 </View>
 
@@ -169,12 +216,12 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
 
                 {/* Name Input */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Habit Name</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.name}</Text>
                     <View style={styles.inputContainer}>
                         <Text style={styles.inputIcon}>{selectedIcon}</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g., Morning Meditation"
+                            placeholder={t.habit.namePlaceholder}
                             placeholderTextColor={colors.textMuted}
                             value={name}
                             onChangeText={setName}
@@ -185,11 +232,11 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
 
                 {/* Description Input */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Description (Optional)</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.description}</Text>
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g., Clear the mind and stay focused"
+                            placeholder={t.habit.descriptionPlaceholder}
                             placeholderTextColor={colors.textMuted}
                             value={description}
                             onChangeText={setDescription}
@@ -203,13 +250,21 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                     entering={FadeInDown.delay(400)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Choose an Icon</Text>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>{t.habit.icon}</Text>
+                        {isCustomIcon && (
+                            <View style={styles.customBadge}>
+                                <Text style={styles.customBadgeText}>{t.habit.custom}</Text>
+                            </View>
+                        )}
+                    </View>
                     <View style={styles.iconGrid}>
                         {habitIcons.map((icon, index) => (
                             <ChoiceButton
                                 key={index}
                                 active={selectedIcon === icon}
                                 style={styles.iconButton}
+                                activeColor={activeThemeColor}
                                 onPress={() => {
                                     triggerSelectionHaptic();
                                     setSelectedIcon(icon);
@@ -219,6 +274,36 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                             </ChoiceButton>
                         ))}
                     </View>
+
+                    {/* Distinct Custom Icon Input */}
+                    <View style={styles.customIconContainer}>
+                        <Text style={styles.customIconPrompt}>{t.habit.customIcon}</Text>
+                        <View style={[
+                            styles.customIconInputBox,
+                            isCustomIcon && {
+                                borderColor: activeThemeColor,
+                                backgroundColor: activeThemeColor + '15'
+                            }
+                        ]}>
+                            <TextInput
+                                style={[styles.iconText, styles.customTextInput]}
+                                value={isCustomIcon ? selectedIcon : ''}
+                                onChangeText={(text) => {
+                                    if (text.length > 0) {
+                                        const icon = getLastGrapheme(text);
+                                        setSelectedIcon(icon);
+                                        triggerSelectionHaptic();
+                                    } else {
+                                        setSelectedIcon('💪');
+                                    }
+                                }}
+                                placeholder={t.habit.customIconPlaceholder}
+                                placeholderTextColor={colors.textMuted}
+                                maxLength={10}
+                            />
+                            {!isCustomIcon && <Ionicons name="add-circle-outline" size={20} color={colors.textMuted} />}
+                        </View>
+                    </View>
                 </Animated.View>
 
                 {/* Color Picker */}
@@ -226,13 +311,14 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                     entering={FadeInDown.delay(500)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Choose a Color</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.color}</Text>
                     <View style={styles.colorGrid}>
                         {colors.habitColors.map((gradient, index) => (
                             <ChoiceButton
                                 key={index}
                                 active={selectedColor === index}
                                 style={[styles.colorButton, selectedColor === index && styles.colorButtonActive]}
+                                activeColor={colors.habitColors[index][0]}
                                 onPress={() => {
                                     triggerSelectionHaptic();
                                     setSelectedColor(index);
@@ -255,7 +341,7 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                     style={styles.section}
                 >
                     <Text style={[styles.sectionTitle, { color: colors.dangerStart }]}>
-                        Danger Zone
+                        {t.habit.dangerZone}
                     </Text>
                     <AnimatedPressable
                         style={[styles.deleteButton, deleteButtonStyle]}
@@ -263,11 +349,10 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                         onPressIn={() => handlePressIn(deleteScale)}
                         onPressOut={() => handlePressOut(deleteScale)}
                     >
-                        <Text style={styles.deleteButtonText}>Delete Habit</Text>
+                        <Text style={styles.deleteButtonText}>{t.habit.deleteHabit}</Text>
                     </AnimatedPressable>
                 </Animated.View>
 
-                {/* Bottom spacing */}
                 {/* Bottom spacing */}
                 <View style={{ height: 120 }} />
             </ScrollView>
@@ -287,17 +372,17 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                         end={{ x: 1, y: 0 }}
                         style={styles.saveButtonGradient}
                     >
-                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                        <Text style={styles.saveButtonText}>{t.habit.saveChanges}</Text>
                     </LinearGradient>
                 </AnimatedPressable>
             </View>
 
             <ConfirmationModal
                 visible={showDeleteModal}
-                title="Delete Habit?"
-                message={`Are you sure you want to delete "${habit.name}"? This will permanently erase all your progress and streaks.`}
-                confirmLabel="Yes, Delete Habit"
-                cancelLabel="Cancel"
+                title={t.confirm.deleteTitle}
+                message={interpolate(t.confirm.deleteMessage, { name: habit.name })}
+                confirmLabel={t.habit.deleteHabit}
+                cancelLabel={t.common.cancel}
                 type="danger"
                 onConfirm={async () => {
                     setShowDeleteModal(false);
@@ -312,7 +397,7 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, insets: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -322,7 +407,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     scrollContent: {
         padding: spacing.md,
-        paddingTop: spacing.lg,
+        paddingTop: Math.max(insets.top, 20) + spacing.sm,
     },
     dragHandleContainer: {
         alignItems: 'center',
@@ -330,14 +415,23 @@ const getStyles = (colors: any) => StyleSheet.create({
         marginBottom: spacing.xs,
     },
     dragHandle: {
-        width: 40,
-        height: 4,
+        width: 40, height: 4,
         backgroundColor: 'rgba(255,255,255,0.2)',
         borderRadius: 2,
     },
     header: {
         marginBottom: spacing.lg,
+    },
+    headerMain: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: spacing.sm,
+    },
+    headerTitleGroup: {
+        flex: 1,
+    },
+    backButton: {
+        marginLeft: -spacing.xs,
     },
     title: {
         ...typography.h1,
@@ -356,13 +450,30 @@ const getStyles = (colors: any) => StyleSheet.create({
     section: {
         marginBottom: spacing.lg,
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.sm,
+    },
     sectionTitle: {
         ...typography.bodyBold,
         color: colors.textSecondary,
-        marginBottom: spacing.sm,
         textTransform: 'uppercase',
         letterSpacing: 1,
         fontSize: 12,
+    },
+    customBadge: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    customBadgeText: {
+        ...typography.small,
+        color: colors.textSecondary,
+        fontSize: 10,
+        textTransform: 'uppercase',
     },
     inputContainer: {
         flexDirection: 'row',
@@ -404,6 +515,30 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     iconText: {
         fontSize: 24,
+    },
+    customIconContainer: {
+        marginTop: spacing.md,
+    },
+    customIconPrompt: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        marginBottom: spacing.xs,
+    },
+    customIconInputBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        paddingHorizontal: spacing.md,
+        height: 56,
+    },
+    customTextInput: {
+        flex: 1,
+        ...typography.body,
+        color: colors.textPrimary,
+        fontSize: 18,
     },
     colorGrid: {
         flexDirection: 'row',

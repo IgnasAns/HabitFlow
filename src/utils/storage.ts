@@ -16,6 +16,12 @@ export const getTodayKey = (): string => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 };
 
+// Parse date key safely using local time
+export const parseDateKey = (key: string): Date => {
+    const [year, month, day] = key.split('-').map(Number);
+    return new Date(year, month - 1, day); // Month is 0-indexed
+};
+
 // Get date string for any date
 export const getDateKey = (date: Date): string => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -42,12 +48,6 @@ export const calculateStreak = (completions: Record<string, number>, dailyTarget
     }
 
     let streak = 1;
-
-    // Parse the first date properly - use local timezone
-    const parseDateKey = (key: string): Date => {
-        const [year, month, day] = key.split('-').map(Number);
-        return new Date(year, month - 1, day); // Month is 0-indexed
-    };
 
     let currentDate = parseDateKey(completedDates[0]);
 
@@ -461,6 +461,54 @@ export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => 
         const isMissed = !isCompleted && !isToday && !isExplicitlyFailed && date < today && date >= createdDate;
 
         // Inactive if: before createdDate AND no progress (handles backfilled data)
+        const isInactive = date < createdDate && progress === 0;
+
+        gridData.push({
+            key: dateKey,
+            progress,
+            dailyTarget,
+            isCompleted,
+            isMissed,
+            isInactive,
+            isToday,
+            isExplicitlyFailed,
+        });
+    }
+
+    return gridData;
+};
+
+// Generate data for a specific calendar month
+export const generateCalendarMonthData = (habit: Habit, year: number, month: number): GridDay[] => {
+    const gridData: GridDay[] = [];
+    const todayKey = getTodayKey();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const createdDate = new Date(habit.createdAt);
+    createdDate.setHours(0, 0, 0, 0);
+
+    const explicitFailures = habit.explicitFailures || {};
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 1; i <= daysInMonth; i++) {
+        const date = new Date(year, month, i);
+        date.setHours(0, 0, 0, 0);
+        const dateKey = getDateKey(date);
+
+        const progress = habit.completions[dateKey] || 0;
+        const dailyTarget = habit.dailyTarget || 1;
+        const isCompleted = progress >= dailyTarget;
+        const isToday = dateKey === todayKey;
+        const isExplicitlyFailed = explicitFailures[dateKey] || false;
+
+        // Future dates in the current month
+        const isFuture = date > today;
+
+        // Missed if: before today, after created, not completed, and NOT explicitly marked as failed
+        const isMissed = !isCompleted && !isToday && !isExplicitlyFailed && !isFuture && date >= createdDate;
+
+        // Inactive if: before createdDate AND no progress
         const isInactive = date < createdDate && progress === 0;
 
         gridData.push({

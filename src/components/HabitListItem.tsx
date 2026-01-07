@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography } from '../theme';
-import { getTodayKey, generateGridData } from '../utils/storage';
+import { getTodayKey, generateGridData, generateCalendarMonthData, parseDateKey } from '../utils/storage';
 import { Habit } from '../types';
 
 interface HabitListItemProps {
@@ -65,12 +65,14 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
             for (let i = history.length; i < 7; i++) padded.push(null);
             return padded;
         }
-        return generateGridData(habit, daysToShow);
-    }, [habit, daysToShow, isMonthly]);
+
+        const today = new Date();
+        return generateCalendarMonthData(habit, today.getFullYear(), today.getMonth());
+    }, [habit, isMonthly]);
 
     const calendarOffset = useMemo(() => {
         if (!isMonthly || gridData.length === 0) return 0;
-        return new Date(gridData[0].key).getDay();
+        return parseDateKey(gridData[0].key).getDay();
     }, [gridData, isMonthly]);
 
     const handleAction = useCallback(async () => {
