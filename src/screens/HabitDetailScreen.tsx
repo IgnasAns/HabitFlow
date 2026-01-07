@@ -6,7 +6,6 @@ import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography } from '../theme';
 import HabitCalendar from '../components/HabitCalendar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType, ImpactStyle } from '../utils/feedback';

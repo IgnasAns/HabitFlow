@@ -16,7 +16,6 @@ import Animated, {
     withSpring,
     useSharedValue,
     SharedValue,
-    Layout,
 } from 'react-native-reanimated';
 import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType, ImpactStyle } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';

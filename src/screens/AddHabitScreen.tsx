@@ -24,13 +24,9 @@ import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography, habitIcons } from '../theme';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-interface AddHabitScreenProps {
-    navigation: NativeStackNavigationProp<any>;
-}
-
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function AddHabitScreen({ navigation }: any) {
+export default function AddHabitScreen({ navigation }: { navigation: NativeStackNavigationProp<any> }) {
     const { addHabit } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();

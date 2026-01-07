@@ -437,7 +437,6 @@ export const storage = {
 };
 
 // Generate data for the contribution grid
-// Generate data for the contribution grid
 export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => {
     const gridData: GridDay[] = [];
     const today = new Date();

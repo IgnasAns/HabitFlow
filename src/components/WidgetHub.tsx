@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { spacing, borderRadius, typography } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
@@ -8,7 +8,6 @@ import { SupportedLanguage } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { getTodayKey } from '../utils/storage';
-import { Share, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -21,35 +20,9 @@ import StyledModal from './StyledModal';
 import ConfirmationModal from './ConfirmationModal';
 import ConfettiOverlay from './ConfettiOverlay';
 
-import { Habit } from '../types';
-
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// Collection of motivational quotes about habits and success
-const MOTIVATIONAL_QUOTES = [
-    { text: "Success is the sum of small efforts, repeated day in and day out.", author: "Robert Collier" },
-    { text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.", author: "Aristotle" },
-    { text: "The secret of your future is hidden in your daily routine.", author: "Mike Murdock" },
-    { text: "Motivation is what gets you started. Habit is what keeps you going.", author: "Jim Ryun" },
-    { text: "Small daily improvements over time lead to stunning results.", author: "Robin Sharma" },
-    { text: "Your habits will determine your future.", author: "Jack Canfield" },
-    { text: "Champions don't do extraordinary things. They do ordinary things, but they do them without thinking.", author: "Charles Duhigg" },
-    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
-    { text: "It's not what we do once in a while that shapes our lives, but what we do consistently.", author: "Tony Robbins" },
-    { text: "First forget inspiration. Habit is more dependable.", author: "Octavia Butler" },
-    { text: "Successful people are simply those with successful habits.", author: "Brian Tracy" },
-    { text: "You'll never change your life until you change something you do daily.", author: "John C. Maxwell" },
-    { text: "The chains of habit are too weak to be felt until they are too strong to be broken.", author: "Samuel Johnson" },
-    { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
-    { text: "Every action you take is a vote for the type of person you wish to become.", author: "James Clear" },
-    { text: "Progress, not perfection, is what we should be asking of ourselves.", author: "Julia Cameron" },
-    { text: "The difference between who you are and who you want to be is what you do.", author: "Unknown" },
-    { text: "A journey of a thousand miles begins with a single step.", author: "Lao Tzu" },
-    { text: "Don't count the days, make the days count.", author: "Muhammad Ali" },
-    { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: "Chinese Proverb" },
-];
 
 export default function WidgetHub() {
     const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData } = useHabits();
@@ -502,42 +475,11 @@ const getStyles = (colors: any) => StyleSheet.create({
     section: {
         marginBottom: spacing.xl,
     },
-    sectionHeader: {
-        marginBottom: spacing.md,
-    },
     sectionTitle: {
         ...typography.small,
         color: colors.textMuted,
         letterSpacing: 1.5,
-        marginBottom: spacing.md, // Default spacing
-    },
-    progressCard: {
-        borderRadius: borderRadius.lg,
-        overflow: 'hidden',
-    },
-    progressGradient: {
-        padding: spacing.xl,
-        alignItems: 'center',
-    },
-    progressPercent: {
-        fontSize: 48,
-        fontWeight: '800',
-        color: colors.textPrimary,
-    },
-    progressLabel: {
-        ...typography.body,
-        color: 'rgba(255,255,255,0.8)',
-        marginTop: spacing.xs,
-    },
-    perfectDay: {
-        ...typography.bodyBold,
-        color: colors.textPrimary,
-        marginTop: spacing.md,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        gap: spacing.md,
-        marginTop: spacing.sm,
+        marginBottom: spacing.md,
     },
     statBig: {
         flex: 1,
@@ -588,37 +530,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         ...typography.bodyBold,
         color: colors.dangerStart,
         fontWeight: '700',
-    },
-    emptyState: {
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.md,
-        padding: spacing.xl,
-        alignItems: 'center',
-    },
-    emptyText: {
-        ...typography.body,
-        color: colors.textMuted,
-        textAlign: 'center',
-    },
-    quoteCard: {
-        backgroundColor: colors.glass,
-        borderRadius: borderRadius.lg,
-        padding: spacing.xl,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-    },
-    quoteText: {
-        ...typography.body,
-        color: colors.textSecondary,
-        fontStyle: 'italic',
-        textAlign: 'center',
-        lineHeight: 24,
-    },
-    quoteAuthor: {
-        ...typography.caption,
-        color: colors.textMuted,
-        textAlign: 'center',
-        marginTop: spacing.md,
     },
     languageContainer: {
         backgroundColor: colors.bgCard,

@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { colors as defaultColors, spacing, borderRadius } from '../theme'; // Keep imports for spacing
 import { useTheme } from '../context/ThemeContext';
 
 // Screens

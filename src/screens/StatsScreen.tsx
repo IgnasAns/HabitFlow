@@ -636,11 +636,6 @@ const getStyles = (colors: any) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-    resetText: {
-        ...typography.small,
-        color: colors.textMuted,
-        textDecorationLine: 'underline',
-    },
     // Period selector styles
     periodSelector: {
         flexDirection: 'row',
