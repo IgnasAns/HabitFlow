@@ -236,8 +236,6 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
         if (isProcessing) return;
         setIsProcessing(true);
 
-        setIsProcessing(true);
-
         triggerHaptic();
         try {
             await Promise.resolve(onIncrement(habit.id, amount));
@@ -307,23 +305,6 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
 
         return padded;
     }, [habit]);
-
-    // Function to calculate opacity for heatmap squares - memoized to prevent stale closures
-    const getHeatmapStyle = useCallback((day: any) => {
-        if (day.isInactive) return styles.gridSquareInactive;
-        if (day.isMissed) return styles.gridSquareMissed;
-
-        const ratio = day.progress / day.dailyTarget;
-        if (ratio === 0) return {};
-
-        // Calculate opacity based on progress ratio
-        // Min 0.2, Max 1.0
-        const opacity = 0.2 + (Math.min(1, ratio) * 0.8);
-        return {
-            backgroundColor: habitThemeColor,
-            opacity: opacity,
-        };
-    }, [habitThemeColor]);
 
     // Handler for navigating to habit details - stops propagation from child elements
     const handleCardPress = useCallback(() => {
@@ -650,18 +631,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     gridColumn: {
         flexDirection: 'column',
     },
-    gridRow: {
-        flexDirection: 'row',
-    },
-    gridSquare: {
-        backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    gridSquareMissed: {
-        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    },
-    gridSquareInactive: {
-        backgroundColor: 'rgba(255,255,255,0.04)',
-    },
     incrementBtn: {
         width: 34,
         height: 34,
@@ -718,26 +687,9 @@ const getStyles = (colors: any) => StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
-    progressRing: {
-        position: 'relative',
-        width: 24,
-        height: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    ringText: {
-        position: 'absolute',
-        fontSize: 9,
-        fontWeight: '800',
-    },
     progressCount: {
         fontSize: 14,
         fontWeight: '800',
     },
-    emptyCircle: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        borderWidth: 2,
-    },
 });
+

@@ -68,13 +68,10 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
         return generateGridData(habit, daysToShow);
     }, [habit, daysToShow, isMonthly]);
 
-    // Calculate calendar offset for monthly view
     const calendarOffset = useMemo(() => {
         if (!isMonthly || gridData.length === 0) return 0;
         return new Date(gridData[0].key).getDay();
     }, [gridData, isMonthly]);
-
-    const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     const handleAction = useCallback(async () => {
         if (isProcessing) return;

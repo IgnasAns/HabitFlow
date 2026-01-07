@@ -10,12 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeIn,
-    FadeInDown,
     FadeOut,
-    FadeOutDown,
-    Layout,
-    ZoomIn,
-    ZoomOut
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography, shadows } from '../theme';

@@ -1,5 +1,4 @@
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // State to cache settings in memory for performance

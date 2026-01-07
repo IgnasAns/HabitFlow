@@ -101,7 +101,6 @@ export default function WidgetHub() {
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
                             scheduleDailyReminder();
-                            scheduleDailyReminder();
                             showInfo("Reminders Set", "You'll be reminded daily at 8 PM to check your habits.", "✅");
                         } else {
                             // Permission denied or error

@@ -69,7 +69,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         else if (viewMode === 'monthly') newMode = 'card';
 
         setViewMode(newMode);
-        setViewMode(newMode);
         AsyncStorage.setItem(VIEW_MODE_KEY, newMode);
         triggerHaptic();
     }, [viewMode]);

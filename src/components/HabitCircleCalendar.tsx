@@ -1,11 +1,5 @@
 import React, { useMemo, memo } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
-import Animated, {
-    useAnimatedStyle,
-    withSpring,
-    useSharedValue,
-    withDelay,
-} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
