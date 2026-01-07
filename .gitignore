@@ -41,3 +41,9 @@ yarn-error.*
 /android
 
 *.apk
+*.aab
+
+# Credentials & Signing (NEVER commit these)
+credentials.json
+*.keystore
+upload_certificate.pem
