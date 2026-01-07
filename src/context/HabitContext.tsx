@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { storage, calculateLevel } from '../utils/storage';
+import { storage, calculateLevel, calculateHabitTotalXp } from '../utils/storage';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
 // Action types
@@ -42,6 +42,7 @@ interface HabitContextType extends HabitState {
     clearLastAction: () => void;
     refreshData: () => Promise<void>;
     resetApp: () => Promise<void>;
+    importData: (data: any) => Promise<boolean>;
 }
 
 const HabitContext = createContext<HabitContextType | null>(null);
@@ -90,6 +91,9 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
             };
 
         case 'TOGGLE_COMPLETE':
+            // The logic here is now mostly visual since XP is pre-calculated in storage, 
+            // but we use the delta passed back to update local state optimistically/correctly.
+            const newTotalXp = Math.max(0, state.userStats.totalXp + action.payload.xpGained);
             return {
                 ...state,
                 habits: state.habits.map(h =>
@@ -97,9 +101,9 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
                 ),
                 userStats: {
                     ...state.userStats,
-                    totalXp: state.userStats.totalXp + action.payload.xpGained
+                    totalXp: newTotalXp
                 },
-                levelInfo: calculateLevel(state.userStats.totalXp + action.payload.xpGained),
+                levelInfo: calculateLevel(newTotalXp),
                 lastAction: {
                     type: 'TOGGLE_COMPLETE',
                     habit: action.payload.habit,
@@ -138,7 +142,24 @@ export function HabitProvider({ children }: HabitProviderProps) {
     const loadData = useCallback(async (): Promise<void> => {
         dispatch({ type: 'SET_LOADING', payload: true });
         const habits = await storage.getHabits();
-        const userStats = await storage.getUserStats();
+        let userStats = await storage.getUserStats();
+
+        // Calculate total XP from all habits to ensure consistency (fix phantom XP)
+        const realTotalXp = habits.reduce((total, habit) => {
+            return total + calculateHabitTotalXp(habit);
+        }, 0);
+
+        // If stored XP mismatches (phantom XP or missing XP), correct it
+        if (userStats.totalXp !== realTotalXp) {
+            console.log(`Correcting XP mismatch: Stored ${userStats.totalXp}, Real ${realTotalXp}`);
+            userStats = {
+                ...userStats,
+                totalXp: realTotalXp
+            };
+            // Save the corrected stats
+            await storage.saveUserStats(userStats);
+        }
+
         dispatch({ type: 'SET_HABITS', payload: habits });
         dispatch({ type: 'SET_USER_STATS', payload: userStats });
     }, []);
@@ -206,6 +227,26 @@ export function HabitProvider({ children }: HabitProviderProps) {
         await loadData();
     }, []);
 
+    const importData = useCallback(async (data: any): Promise<boolean> => {
+        try {
+            // Basic validation
+            if (!data || !Array.isArray(data.habits) || !data.userStats) {
+                return false;
+            }
+
+            // Save to storage
+            await storage.saveHabits(data.habits);
+            await storage.saveUserStats(data.userStats);
+
+            // Reload
+            await loadData();
+            return true;
+        } catch (e) {
+            console.error('Import failed', e);
+            return false;
+        }
+    }, [loadData]);
+
     const value: HabitContextType = useMemo(() => ({
         ...state,
         addHabit,
@@ -218,7 +259,8 @@ export function HabitProvider({ children }: HabitProviderProps) {
         clearLastAction,
         refreshData: loadData,
         resetApp,
-    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, clearLastAction, loadData, resetApp]);
+        importData,
+    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, clearLastAction, loadData, resetApp, importData]);
 
     return (
         <HabitContext.Provider value={value}>

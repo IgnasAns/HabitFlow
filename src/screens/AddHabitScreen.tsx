@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -17,9 +17,11 @@ import Animated, {
     useSharedValue,
     Layout,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
-import { colors, spacing, borderRadius, typography, habitIcons } from '../theme';
+import { useI18n } from '../context/I18nContext';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography, habitIcons } from '../theme';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 interface AddHabitScreenProps {
@@ -28,8 +30,11 @@ interface AddHabitScreenProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
+export default function AddHabitScreen({ navigation }: any) {
     const { addHabit } = useHabits();
+    const { t } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -44,11 +49,11 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
 
     const handleSave = async () => {
         if (!name.trim()) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            triggerNotificationHaptic(FeedbackType.Error);
             return;
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        triggerNotificationHaptic(FeedbackType.Success);
 
         await addHabit({
             name: name.trim(),
@@ -129,18 +134,18 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
 
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>New Habit</Text>
-                    <Text style={styles.subtitle}>Build a better you, one habit at a time</Text>
+                    <Text style={styles.title}>{t.nav.addHabit}</Text>
+                    <Text style={styles.subtitle}>{t.home.startBuilding}</Text>
                 </View>
 
                 {/* Name Input */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Habit Name</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.name}</Text>
                     <View style={styles.inputContainer}>
                         <Text style={styles.inputIcon}>{selectedIcon}</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g., Morning Meditation"
+                            placeholder={t.habit.namePlaceholder}
                             placeholderTextColor={colors.textMuted}
                             value={name}
                             onChangeText={setName}
@@ -151,11 +156,11 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
 
                 {/* Description Input */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Description (Optional)</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.description}</Text>
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g., Clear the mind and stay focused"
+                            placeholder={t.habit.descriptionPlaceholder}
                             placeholderTextColor={colors.textMuted}
                             value={description}
                             onChangeText={setDescription}
@@ -169,7 +174,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     entering={FadeInDown.delay(300)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Choose an Icon</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.icon}</Text>
                     <View style={styles.iconGrid}>
                         {habitIcons.map((icon, index) => (
                             <ChoiceButton
@@ -178,7 +183,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                                 style={styles.iconButton}
                                 activeColor={activeThemeColor}
                                 onPress={() => {
-                                    Haptics.selectionAsync();
+                                    triggerSelectionHaptic();
                                     setSelectedIcon(icon);
                                 }}
                             >
@@ -193,7 +198,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     entering={FadeInDown.delay(400)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Choose a Color</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.color}</Text>
                     <View style={styles.colorGrid}>
                         {colors.habitColors.map((gradient, index) => (
                             <ChoiceButton
@@ -201,8 +206,15 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                                 active={selectedColor === index}
                                 style={[styles.colorButton, selectedColor === index && styles.colorButtonActive]}
                                 activeColor={colors.habitColors[index][0]}
+                                hitSlop={8}
                                 onPress={() => {
-                                    Haptics.selectionAsync();
+                                    triggerSelectionHaptic();
+                                    // Select 0th index color (New Primary Cyan) as default, or any logic
+                                    // But here we select indices.
+                                    // Let's keep existing logic but ensure colors are from context if needed.
+                                    // Actually, colors.habitColors is constant in theme,
+                                    // but we might want them to adapt?
+                                    // For now, habit colors are likely static.
                                     setSelectedColor(index);
                                 }}
                             >
@@ -222,14 +234,14 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     entering={FadeInDown.delay(500)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Frequency</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.frequency}</Text>
                     <View style={styles.frequencyContainer}>
                         <ChoiceButton
                             active={frequency === 'daily'}
                             style={styles.frequencyButton}
                             activeColor={activeThemeColor}
                             onPress={() => {
-                                Haptics.selectionAsync();
+                                triggerSelectionHaptic();
                                 setFrequency('daily');
                             }}
                         >
@@ -238,10 +250,10 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                                     colors={[...colors.habitColors[selectedColor]]}
                                     style={styles.frequencyGradient}
                                 >
-                                    <Text style={styles.frequencyTextActive}>Daily</Text>
+                                    <Text style={styles.frequencyTextActive}>{t.habit.daily}</Text>
                                 </LinearGradient>
                             ) : (
-                                <Text style={styles.frequencyText}>Daily</Text>
+                                <Text style={styles.frequencyText}>{t.habit.daily}</Text>
                             )}
                         </ChoiceButton>
 
@@ -250,7 +262,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                             style={styles.frequencyButton}
                             activeColor={activeThemeColor}
                             onPress={() => {
-                                Haptics.selectionAsync();
+                                triggerSelectionHaptic();
                                 setFrequency('weekly');
                             }}
                         >
@@ -259,10 +271,10 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                                     colors={[...colors.habitColors[selectedColor]]}
                                     style={styles.frequencyGradient}
                                 >
-                                    <Text style={styles.frequencyTextActive}>Weekly</Text>
+                                    <Text style={styles.frequencyTextActive}>{t.habit.weekly}</Text>
                                 </LinearGradient>
                             ) : (
-                                <Text style={styles.frequencyText}>Weekly</Text>
+                                <Text style={styles.frequencyText}>{t.habit.weekly}</Text>
                             )}
                         </ChoiceButton>
                     </View>
@@ -273,7 +285,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     entering={FadeInDown.delay(550)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Daily Target (e.g., 8 glasses)</Text>
+                    <Text style={styles.sectionTitle}>{t.habit.dailyTarget}</Text>
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
@@ -292,7 +304,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                     entering={FadeInDown.delay(600)}
                     style={styles.section}
                 >
-                    <Text style={styles.sectionTitle}>Preview</Text>
+                    <Text style={styles.sectionTitle}>{t.stats.preview}</Text>
                     <Animated.View layout={Layout.springify()} style={styles.previewCard}>
                         <View style={styles.previewIcon}>
                             <LinearGradient
@@ -306,7 +318,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                         </View>
                         <View style={styles.previewInfo}>
                             <Text style={styles.previewName}>
-                                {name || 'Your new habit'}
+                                {name || t.stats.yourNewHabit}
                             </Text>
                             {description ? (
                                 <Text style={styles.previewDescription} numberOfLines={1}>
@@ -314,7 +326,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                                 </Text>
                             ) : null}
                             <Text style={styles.previewFrequency}>
-                                {frequency === 'daily' ? 'Every day' : 'Weekly'} • Target: {dailyTarget || '1'}
+                                {frequency === 'daily' ? t.stats.everyDay : t.habit.weekly} • {t.stats.target}: {dailyTarget || '1'}
                             </Text>
                         </View>
                     </Animated.View>
@@ -339,7 +351,7 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
                         end={{ x: 1, y: 0 }}
                         style={styles.saveButtonGradient}
                     >
-                        <Text style={styles.saveButtonText}>Create Habit</Text>
+                        <Text style={styles.saveButtonText}>{t.habit.createHabit}</Text>
                     </LinearGradient>
                 </AnimatedPressable>
             </View>
@@ -347,7 +359,8 @@ export default function AddHabitScreen({ navigation }: AddHabitScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

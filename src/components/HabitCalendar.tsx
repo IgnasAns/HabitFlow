@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { colors, spacing, borderRadius, typography } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography } from '../theme';
 import { Habit } from '../types';
 import { Ionicons } from '@expo/vector-icons';
+import { useI18n } from '../context/I18nContext';
 import { getDateKey } from '../utils/storage';
 import * as Haptics from 'expo-haptics';
 
@@ -12,6 +14,9 @@ interface HabitCalendarProps {
 }
 
 export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
+    const { t } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
     const [viewDate, setViewDate] = useState(new Date());
 
     // Theme color
@@ -27,7 +32,8 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
 
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
-    const monthName = viewDate.toLocaleString('default', { month: 'long' });
+    const monthNames = [t.calendar.januaryShort, t.calendar.februaryShort, t.calendar.marchShort, t.calendar.aprilShort, t.calendar.mayShort, t.calendar.juneShort, t.calendar.julyShort, t.calendar.augustShort, t.calendar.septemberShort, t.calendar.octoberShort, t.calendar.novemberShort, t.calendar.decemberShort];
+    const monthName = monthNames[month];
 
     const daysInCurrentMonth = getDaysInMonth(year, month);
     const startDayOffset = getFirstDayOfMonth(year, month);
@@ -122,7 +128,7 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
 
             {/* Weekday Headers */}
             <View style={styles.weekRow}>
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                {[t.calendar.monday, t.calendar.tuesday, t.calendar.wednesday, t.calendar.thursday, t.calendar.friday, t.calendar.saturday, t.calendar.sunday].map(day => (
                     <Text key={day} style={styles.weekDayText}>{day}</Text>
                 ))}
             </View>
@@ -135,7 +141,8 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         backgroundColor: colors.bgCard,
         borderRadius: borderRadius.lg, // Matches screenshot rounded style
@@ -197,7 +204,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: colors.emptyCell,
     },
     todayCell: {
         // Subtle highlight?

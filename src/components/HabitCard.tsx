@@ -15,12 +15,14 @@ import Animated, {
     withTiming,
     FadeIn,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography, shadows } from '../theme';
+import { useI18n } from '../context/I18nContext';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, typography, shadows } from '../theme';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Habit, GridDay } from '../types';
+import { triggerHaptic, triggerSelectionHaptic } from '../utils/feedback';
 
 // Grid configuration constants
 const GRID_ROWS = 7;
@@ -38,60 +40,20 @@ interface HabitCardProps {
     isActive?: boolean;
 }
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-// Simple GridSquare for non-today cells (no animation overhead)
-interface GridSquareProps {
-    day: GridDay;
-    size: number;
-    themeColor: string;
-    onAction: (key: string) => void;
-    getHeatmapStyle: (day: GridDay) => any;
-}
-
-const GridSquare = memo(({ day, size, themeColor, onAction, getHeatmapStyle }: GridSquareProps) => {
-    const heatmapStyle = getHeatmapStyle(day);
-
-    return (
-        <Pressable
-            onPress={() => !day.isInactive && onAction(day.key)}
-            disabled={day.isInactive}
-            style={({ pressed }) => [
-                styles.gridSquare,
-                {
-                    width: size,
-                    height: size,
-                    borderRadius: Math.max(2, size * 0.2)
-                },
-                heatmapStyle,
-                pressed && !day.isInactive && { opacity: 0.6, transform: [{ scale: 1.1 }] }
-            ]}
-            hitSlop={day.isInactive ? 0 : 4}
-        />
-    );
-    // Compare all relevant properties in GridSquare memo  
-}, (prev, next) => {
-    return prev.day.key === next.day.key &&
-        prev.day.progress === next.day.progress &&
-        prev.day.isCompleted === next.day.isCompleted &&
-        prev.day.isMissed === next.day.isMissed &&
-        prev.day.isInactive === next.day.isInactive &&
-        prev.size === next.size &&
-        prev.themeColor === next.themeColor;
-});
-
 // Simple square component for all grid cells (including today)
-const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
+const SimpleGridSquare = memo(({ day, size, themeColor, onAction, opacityMultiplier = 1, colors }: {
     day: GridDay;
     size: number;
     themeColor: string;
     onAction: (key: string) => void;
+    opacityMultiplier?: number;
+    colors: any;
 }) => {
     // Calculate background color directly
     const getBackgroundColor = () => {
-        if (day.isInactive) return 'rgba(255,255,255,0.04)';
-        if (day.isExplicitlyFailed) return 'rgba(239, 100, 68, 0.6)'; // Explicit fail - red-orange
-        if (day.isMissed) return 'rgba(239, 68, 68, 0.15)'; // Missed - light red
+        if (day.isExplicitlyFailed) return colors.dangerStart; // Explicit fail - solid red
+        if (day.isInactive) return colors.emptyCell && colors.emptyCell.replace('0.08', '0.04');
+        if (day.isMissed) return colors.dangerStart; // Missed - also solid red (unfilled styling handled by opacity)
 
         // If completed or has progress, use the theme color
         if (day.progress > 0) {
@@ -99,11 +61,13 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
         }
 
         // Empty state
-        return day.isToday ? 'transparent' : 'rgba(255,255,255,0.08)';
+        return day.isToday ? 'transparent' : colors.emptyCell;
     };
 
     const getOpacity = () => {
-        if (day.isInactive || day.isMissed || day.isExplicitlyFailed) return 1;
+        if (day.isInactive) return 1;
+        if (day.isExplicitlyFailed) return 1; // Explicitly failed - full opacity
+        if (day.isMissed) return 0.3; // Missed - lighter opacity (not filled look)
 
         if (day.progress > 0) {
             const ratio = Math.min(1, day.progress / day.dailyTarget);
@@ -111,13 +75,26 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
             return 0.5 + (ratio * 0.5);
         }
 
-        return 1;
+        // Empty state - apply temporal fading
+        return opacityMultiplier;
     };
+
+    // Handle press with event consumption to prevent card navigation
+    const handlePress = useCallback((e?: any) => {
+        // Stop the event from propagating to the parent card
+        e?.stopPropagation?.();
+        if (!day.isInactive) {
+            onAction(day.key);
+        }
+    }, [day.isInactive, day.key, onAction]);
+
+    // Determine if we should show a checkmark (completed habits)
+    const isCompleted = day.progress >= day.dailyTarget && !day.isExplicitlyFailed && !day.isMissed;
 
     return (
         <Pressable
-            onPress={() => !day.isInactive && onAction(day.key)}
-            disabled={day.isInactive}
+            onPress={handlePress}
+            disabled={day.isInactive && !day.isExplicitlyFailed}
             style={({ pressed }) => [
                 {
                     width: size,
@@ -125,26 +102,32 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
                     borderRadius: Math.max(2, size * 0.25),
                     backgroundColor: getBackgroundColor(),
                     opacity: getOpacity(),
-                    borderWidth: (day.isToday || day.isExplicitlyFailed) ? 1.5 : 0,
+                    borderWidth: (day.isToday || day.isExplicitlyFailed) ? 2 : 0,
                     borderColor: day.isExplicitlyFailed
-                        ? 'rgba(239, 100, 68, 1)'
+                        ? colors.dangerStart
                         : day.isToday
-                            ? themeColor
+                            ? colors.streakStart // Appealing Gold Highlight
                             : 'transparent',
                     justifyContent: 'center',
                     alignItems: 'center',
                 },
-                pressed && !day.isInactive && { transform: [{ scale: 1.15 }] }
+                pressed && (!day.isInactive || day.isExplicitlyFailed) && { transform: [{ scale: 1.15 }] }
             ]}
-            hitSlop={day.isInactive ? 0 : 4}
+            hitSlop={(!day.isInactive || day.isExplicitlyFailed) ? 4 : 0}
         >
             {day.isExplicitlyFailed && (
-                <Text style={{
-                    color: '#fff',
-                    fontSize: Math.max(8, size * 0.6),
-                    fontWeight: '900',
-                    lineHeight: Math.max(8, size * 0.65),
-                }}>×</Text>
+                <Ionicons
+                    name="close"
+                    size={Math.max(8, size * 0.55)}
+                    color="#fff"
+                />
+            )}
+            {isCompleted && (
+                <Ionicons
+                    name="checkmark"
+                    size={Math.max(6, size * 0.5)}
+                    color="#fff"
+                />
             )}
         </Pressable>
     );
@@ -155,10 +138,17 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction }: {
         prev.day.isMissed === next.day.isMissed &&
         prev.day.isExplicitlyFailed === next.day.isExplicitlyFailed &&
         prev.size === next.size &&
-        prev.themeColor === next.themeColor;
+        prev.themeColor === next.themeColor &&
+        prev.opacityMultiplier === next.opacityMultiplier;
 });
 
 const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: HabitCardProps) => {
+    const { t } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]); // Dynamic styles
+    const monthNames = [t.calendar.januaryShort, t.calendar.februaryShort, t.calendar.marchShort, t.calendar.aprilShort, t.calendar.mayShort, t.calendar.juneShort, t.calendar.julyShort, t.calendar.augustShort, t.calendar.septemberShort, t.calendar.octoberShort, t.calendar.novemberShort, t.calendar.decemberShort];
+    const weekDaysSun = [t.calendar.sunday.charAt(0), t.calendar.monday.charAt(0), t.calendar.tuesday.charAt(0), t.calendar.wednesday.charAt(0), t.calendar.thursday.charAt(0), t.calendar.friday.charAt(0), t.calendar.saturday.charAt(0)];
+
     const { width: screenWidth } = useWindowDimensions();
 
     // Dynamic grid calculations - fit exactly VISIBLE_WEEKS within the card
@@ -186,6 +176,7 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
     const cardScale = useSharedValue(1);
     const progressValue = useSharedValue(progressToday / habit.dailyTarget);
     const [showIncrementOptions, setShowIncrementOptions] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Smart increment options based on daily target
     const getSmartIncrements = useMemo(() => {
@@ -213,30 +204,54 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
         right: 0,
     }));
 
-    const handleAction = useCallback((dateKey?: string) => {
+    const handleAction = useCallback(async (dateKey?: string) => {
+        if (isProcessing) return;
+        setIsProcessing(true);
         const targetKey = dateKey || todayKey;
 
-        // Provide haptic feedback and toggle - no confirmation modal
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        // Provide haptic feedback and toggle
+        triggerHaptic();
         if (!dateKey || dateKey === todayKey) {
             checkScale.value = withSequence(
                 withTiming(1.3, { duration: 100 }),
                 withTiming(1, { duration: 150 })
             );
         }
-        onToggle(habit.id, targetKey);
-    }, [onToggle, habit.id, todayKey]);
 
-    const handleIncrement = useCallback((amount: number = 1) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onIncrement(habit.id, amount);
-        setShowIncrementOptions(false);
-    }, [onIncrement, habit.id]);
+        // We assume onToggle returns a promise (or we just wait a bit)
+        // Since we can't change the prop type easily to Promise without breaking chains, 
+        // we'll rely on the fact that the parent re-render will likely clear the processing state 
+        // when the new habits prop comes in. 
+        // However, safe timeout is better.
+        try {
+            await Promise.resolve(onToggle(habit.id, targetKey));
+        } finally {
+            // Re-enable after a shorter delay to feel responsive, 
+            // but long enough to block immediate double-tap
+            setTimeout(() => setIsProcessing(false), 200);
+        }
+    }, [onToggle, habit.id, todayKey, isProcessing]);
+
+    const handleIncrement = useCallback(async (amount: number = 1) => {
+        if (isProcessing) return;
+        setIsProcessing(true);
+
+        setIsProcessing(true);
+
+        triggerHaptic();
+        try {
+            await Promise.resolve(onIncrement(habit.id, amount));
+            setShowIncrementOptions(false);
+        } finally {
+            setTimeout(() => setIsProcessing(false), 200);
+        }
+    }, [onIncrement, habit.id, isProcessing]);
 
     const toggleIncrementOptions = useCallback(() => {
-        Haptics.selectionAsync();
+        if (isProcessing) return;
+        triggerSelectionHaptic();
         setShowIncrementOptions(prev => !prev);
-    }, []);
+    }, [isProcessing]);
 
     const handlePressIn = () => {
         cardScale.value = withSpring(0.97);
@@ -248,19 +263,50 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
 
     const checkStyle = useAnimatedStyle(() => ({
         transform: [{ scale: checkScale.value }],
-        shadowColor: habitThemeColor,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: Math.min(0.6, progressValue.value * 0.6),
-        shadowRadius: progressValue.value * 12,
-        elevation: progressValue.value * 8, // Gradient shadow for number habits
+        // Note: shadows on web render as squares, not circles
+        // Only apply glow shadow on native platforms
+        ...(Platform.OS !== 'web' ? {
+            shadowColor: habitThemeColor,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: Math.min(0.6, progressValue.value * 0.6),
+            shadowRadius: progressValue.value * 12,
+            elevation: progressValue.value * 8,
+        } : {}),
     }));
 
     const cardStyle = useAnimatedStyle(() => ({
         transform: [{ scale: cardScale.value }],
     }));
 
-    // Generate grid data directly - no memoization to ensure fresh data
-    const gridData = generateGridData(habit, GRID_DAYS);
+    // Generate aligned grid data (Starting Sunday, ending Next Saturday)
+    const gridData = useMemo(() => {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0=Sun, ... 6=Sat
+
+        // Calculate how far back we need to go to find the Sunday of the first week
+        // We show VISIBLE_WEEKS columns.
+        // The last column is the current week.
+        // Start date = Sunday of (VISIBLE_WEEKS - 1) weeks ago.
+        const daysBack = (VISIBLE_WEEKS - 1) * 7 + dayOfWeek;
+
+        // Get history ending Today
+        const history = generateGridData(habit, daysBack + 1);
+
+        // We typically have 13 * 7 = 91 cells total.
+        // history length is daysBack + 1.
+        // Remaining cells are future days in the current week.
+        const totalCells = VISIBLE_WEEKS * GRID_ROWS;
+        const futureCount = totalCells - history.length;
+
+        const padded: (GridDay | null)[] = [...history];
+
+        // Add placeholders for future
+        for (let i = 0; i < futureCount; i++) {
+            padded.push(null);
+        }
+
+        return padded;
+    }, [habit]);
 
     // Function to calculate opacity for heatmap squares - memoized to prevent stale closures
     const getHeatmapStyle = useCallback((day: any) => {
@@ -279,12 +325,13 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
         };
     }, [habitThemeColor]);
 
+    // Handler for navigating to habit details - stops propagation from child elements
+    const handleCardPress = useCallback(() => {
+        onPress(habit.id);
+    }, [onPress, habit.id]);
+
     return (
-        <AnimatedPressable
-            onPress={() => onPress(habit.id)}
-            onLongPress={drag}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
+        <Animated.View
             style={[
                 styles.container,
                 cardStyle,
@@ -299,31 +346,40 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                 }
             ]}
         >
-            <View style={[
-                styles.card,
-                {
-                    borderColor: isCompletedToday ? habitThemeColor + '40' : 'rgba(255,255,255,0.06)',
-                    shadowColor: isCompletedToday ? habitThemeColor : '#000',
-                    shadowOpacity: isCompletedToday ? 0.35 : 0.25,
-                    shadowRadius: isCompletedToday ? 20 : 12,
-                    elevation: isCompletedToday ? 10 : 4
-                }
-            ]}>
-                {/* Header Row */}
+            <Pressable
+                onPress={handleCardPress}
+                onLongPress={drag}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={[
+                    styles.card,
+                    {
+                        borderColor: isCompletedToday ? habitThemeColor + '20' : 'rgba(255,255,255,0.06)',
+                        // Subtle shadow only, not glowing borders
+                    }
+                ]}>
+                {/* Header Row - with actions inline */}
                 <View style={styles.header}>
-                    <View style={[styles.iconBox, { backgroundColor: 'rgba(255,255,255,0.04)' }]}>
-                        <Text style={styles.icon}>{habit.icon}</Text>
+                    {/* Left side - info */}
+                    <View style={styles.headerLeft}>
+                        <View style={[styles.iconBox, { backgroundColor: colors.emptyCell }]}>
+                            <Text style={styles.icon}>{habit.icon}</Text>
+                        </View>
+
+                        <View style={styles.info}>
+                            <Text style={styles.name} numberOfLines={1}>
+                                {habit.name}
+                            </Text>
+                            <View style={styles.descriptionRow}>
+                                <Text style={styles.description} numberOfLines={1}>
+                                    {progressToday}/{habit.dailyTarget} today • {habit.streak}🔥
+                                </Text>
+                                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} style={{ marginLeft: 4 }} />
+                            </View>
+                        </View>
                     </View>
 
-                    <View style={styles.info}>
-                        <Text style={styles.name} numberOfLines={1}>
-                            {habit.name}
-                        </Text>
-                        <Text style={styles.description} numberOfLines={1}>
-                            {progressToday}/{habit.dailyTarget} today • {habit.streak} day streak
-                        </Text>
-                    </View>
-
+                    {/* Right side - Actions (don't navigate) */}
                     <View style={styles.actions}>
                         {habit.dailyTarget > 1 && (
                             <View style={styles.incrementContainer}>
@@ -357,8 +413,15 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                                         styles.incrementBtn,
                                         pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }
                                     ]}
-                                    onPress={() => getSmartIncrements.length > 1 ? toggleIncrementOptions() : handleIncrement(1)}
-                                    onLongPress={() => getSmartIncrements.length > 1 && toggleIncrementOptions()}
+                                    onPressIn={(e) => e.stopPropagation()}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        getSmartIncrements.length > 1 ? toggleIncrementOptions() : handleIncrement(1);
+                                    }}
+                                    onLongPress={(e) => {
+                                        e.stopPropagation();
+                                        getSmartIncrements.length > 1 && toggleIncrementOptions();
+                                    }}
                                 >
                                     <Text style={[styles.incrementText, { color: habitThemeColor }]}>+{getSmartIncrements.length > 1 ? '' : '1'}</Text>
                                 </Pressable>
@@ -373,60 +436,131 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                                     isCompletedToday
                                         ? { backgroundColor: habitThemeColor, borderColor: habitThemeColor }
                                         : isExplicitlyFailedToday
-                                            ? { backgroundColor: 'rgba(239, 100, 68, 0.8)', borderColor: 'rgba(239, 100, 68, 0.8)' }
+                                            ? { backgroundColor: colors.dangerStart, borderColor: colors.dangerStart }
                                             : { borderColor: habitThemeColor + '40', backgroundColor: 'transparent' }
                                 ]}
-                                onPress={() => handleAction()}
+                                onPressIn={(e) => e.stopPropagation()}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    handleAction();
+                                }}
                             >
                                 {!isCompletedToday && !isExplicitlyFailedToday && <Animated.View style={progressStyle} />}
                                 {isCompletedToday ? (
-                                    <Text style={styles.checkMark}>✓</Text>
+                                    <Ionicons name="checkmark" size={20} color="#fff" style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
                                 ) : isExplicitlyFailedToday ? (
-                                    <Text style={styles.checkMark}>×</Text>
+                                    <Ionicons name="close" size={20} color="#fff" style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
                                 ) : habit.dailyTarget > 1 ? (
                                     <Text style={[styles.progressCount, { color: habitThemeColor }]}>
                                         {progressToday}
                                     </Text>
                                 ) : (
-                                    <Text style={[styles.plusIcon, { color: habitThemeColor, opacity: 0.6 }]}>+</Text>
+                                    <Ionicons name="add" size={22} color={habitThemeColor} style={{ opacity: 0.6, backgroundColor: 'transparent' }} />
                                 )}
                             </Pressable>
                         </Animated.View>
                     </View>
                 </View>
 
-                {/* Fixed Grid Section - No Scrolling */}
-                <View style={[styles.gridSection, { height: gridHeight }]}>
-                    <View style={[styles.grid, { gap: responsiveGap }]}>
-                        {Array.from({ length: VISIBLE_WEEKS }).map((_, colIndex) => (
-                            <View key={colIndex} style={[styles.gridColumn, { gap: responsiveGap }]}>
-                                {Array.from({ length: GRID_ROWS }).map((_, rowIndex) => {
-                                    const dayIndex = colIndex * GRID_ROWS + rowIndex;
-                                    const day = gridData[dayIndex];
-                                    if (!day) return null;
+                {/* Fixed Grid Section - No Scrolling, minimal top margin */}
+                {/* Fixed Grid Section with Labels */}
+                <View style={[styles.gridSection, { height: gridHeight + 30, paddingTop: 6 }]}>
 
-                                    return (
-                                        <SimpleGridSquare
-                                            key={day.key}
-                                            day={day}
-                                            size={squareSize}
-                                            themeColor={habitThemeColor}
-                                            onAction={handleAction}
-                                        />
-                                    );
-                                })}
-                            </View>
-                        ))}
+                    {/* Month Labels - Use gap to match grid exactly */}
+                    <View style={{ flexDirection: 'row', marginLeft: 32, marginBottom: 8, gap: responsiveGap, height: 14 }}>
+                        {Array.from({ length: VISIBLE_WEEKS }).map((_, colIndex) => {
+                            const dayIndex = colIndex * GRID_ROWS;
+                            const day = gridData[dayIndex];
+
+                            // Logic to show month label only when month changes
+                            let showLabel = false;
+                            let monthLabel = '';
+                            let labelOpacity = 1;
+
+                            if (day) {
+                                const date = new Date(day.key);
+                                const prevDay = colIndex > 0 ? gridData[(colIndex - 1) * GRID_ROWS] : null;
+                                const prevDate = prevDay ? new Date(prevDay.key) : null;
+
+                                if (!prevDate || date.getMonth() !== prevDate.getMonth()) {
+                                    if (colIndex < VISIBLE_WEEKS - 2) {
+                                        showLabel = true;
+                                        monthLabel = monthNames[date.getMonth()];
+
+                                        // Calculate opacity based on month recency
+                                        const today = new Date();
+                                        const monthDiff = (today.getFullYear() - date.getFullYear()) * 12 + (today.getMonth() - date.getMonth());
+                                        // 0 -> 1, 1 -> 0.7, 2 -> 0.4, 3+ -> 0.3
+                                        labelOpacity = Math.max(0.3, 1 - (monthDiff * 0.3));
+                                    }
+                                }
+                            }
+
+                            return (
+                                <View key={colIndex} style={{ width: squareSize, height: 14, overflow: 'visible', alignItems: 'flex-start' }}>
+                                    {showLabel && (
+                                        <Text style={{ fontSize: 10, color: colors.textSecondary, opacity: labelOpacity, width: 30, position: 'absolute', top: 0, left: -6, textAlign: 'center' }} numberOfLines={1}>
+                                            {monthLabel}
+                                        </Text>
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </View>
+
+                    <View style={{ flexDirection: 'row' }}>
+                        {/* Day Labels (Left) - Nudge down slightly for visual center alignment */}
+                        <View style={{ width: 24, marginRight: 8, gap: responsiveGap, paddingTop: 1 }}>
+                            {weekDaysSun.map((d, i) => (
+                                <View key={i} style={{ height: squareSize, justifyContent: 'center', alignItems: 'flex-end' }}>
+                                    <Text style={{ fontSize: 10, color: colors.textSecondary, lineHeight: 12 }}>{d}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Grid */}
+                        <View style={[styles.grid, { gap: responsiveGap }]}>
+                            {Array.from({ length: VISIBLE_WEEKS }).map((_, colIndex) => (
+                                <View key={colIndex} style={[styles.gridColumn, { gap: responsiveGap }]}>
+                                    {Array.from({ length: GRID_ROWS }).map((_, rowIndex) => {
+                                        const dayIndex = colIndex * GRID_ROWS + rowIndex;
+                                        const day = gridData[dayIndex];
+                                        if (!day) {
+                                            return <View key={`empty-${dayIndex}`} style={{ width: squareSize, height: squareSize }} />;
+                                        }
+
+                                        // Calculate opacity based on month recency
+                                        const date = new Date(day.key);
+                                        const today = new Date();
+                                        const monthDiff = (today.getFullYear() - date.getFullYear()) * 12 + (today.getMonth() - date.getMonth());
+                                        const opacity = Math.max(0.3, 1 - (monthDiff * 0.3));
+
+                                        return (
+                                            <SimpleGridSquare
+                                                key={day.key}
+                                                day={day}
+                                                size={squareSize}
+                                                themeColor={habitThemeColor}
+                                                onAction={() => { }} // Read-only grid as requested
+                                                opacityMultiplier={opacity}
+                                                colors={colors}
+                                            />
+                                        );
+                                    })}
+                                </View>
+                            ))}
+                        </View>
                     </View>
                 </View>
-            </View>
-        </AnimatedPressable>
+            </Pressable>
+        </Animated.View>
     );
 };
 
 export default React.memo(HabitCard);
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         marginHorizontal: spacing.md,
         marginBottom: spacing.md,
@@ -471,6 +605,21 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: -1,
     },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: spacing.md,
+    },
+    descriptionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
     checkBtn: {
         width: 38,
         height: 38,
@@ -490,7 +639,7 @@ const styles = StyleSheet.create({
         fontWeight: '400',
     },
     gridSection: {
-        marginTop: 18,
+        marginTop: 10,
         alignItems: 'center', // Center the grid horizontally
         justifyContent: 'center',
     },
@@ -512,11 +661,6 @@ const styles = StyleSheet.create({
     },
     gridSquareInactive: {
         backgroundColor: 'rgba(255,255,255,0.04)',
-    },
-    actions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
     },
     incrementBtn: {
         width: 34,

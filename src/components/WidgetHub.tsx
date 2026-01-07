@@ -1,15 +1,31 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
-import { colors, spacing, borderRadius, typography } from '../theme';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { spacing, borderRadius, typography } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
+import { useI18n } from '../context/I18nContext';
+import { SupportedLanguage } from '../i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { getTodayKey } from '../utils/storage';
-import StyledModal from './StyledModal';
-import ConfettiOverlay from './ConfettiOverlay';
-import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { Share, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { scheduleDailyReminder, cancelReminders, registerForPushNotificationsAsync, scheduleTestNotification } from '../utils/notifications';
+import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, updateFeedbackSettings, FeedbackType } from '../utils/feedback';
+
+import StyledModal from './StyledModal';
+import ConfirmationModal from './ConfirmationModal';
+import ConfettiOverlay from './ConfettiOverlay';
+
 import { Habit } from '../types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Collection of motivational quotes about habits and success
 const MOTIVATIONAL_QUOTES = [
@@ -36,29 +52,203 @@ const MOTIVATIONAL_QUOTES = [
 ];
 
 export default function WidgetHub() {
-    const { habits, toggleHabitCompletion, levelInfo, userStats, lastAction, clearLastAction, reorderHabits } = useHabits();
+    const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData } = useHabits();
+    const { t, language, setLanguage, languageNames, languageFlags, supportedLanguages } = useI18n();
+    const { colors, toggleTheme, theme } = useTheme();
     const todayKey = getTodayKey();
+    // Use local state for options
+    const [smartReminders, setSmartReminders] = useState(false);
+    const [hapticsEnabled, setHapticsEnabled] = useState(true);
+    const [soundEnabled, setSoundEnabled] = useState(true);
+
+    // Load settings
+    useEffect(() => {
+        const loadSettings = async () => {
+            try {
+                const storedSettings = await AsyncStorage.getItem('app_settings');
+                if (storedSettings) {
+                    const parsed = JSON.parse(storedSettings);
+                    setSmartReminders(parsed.smartReminders ?? false);
+                    setHapticsEnabled(parsed.hapticsEnabled ?? true);
+                    setSoundEnabled(parsed.soundEnabled ?? true);
+                    // Theme handled by ThemeProvider
+                }
+            } catch (e) {
+                // error loading
+            }
+        };
+        loadSettings();
+    }, []);
+
+    const saveSettings = async (updates: any) => {
+        try {
+            const currentMatrix = { smartReminders, hapticsEnabled, soundEnabled, darkMode: theme === 'dark' };
+            const newSettings = { ...currentMatrix, ...updates };
+            await AsyncStorage.setItem('app_settings', JSON.stringify(newSettings));
+        } catch (e) {
+            // error saving
+        }
+    };
+
+    const toggleSetting = (key: string) => {
+        triggerSelectionHaptic();
+        switch (key) {
+            case 'smartReminders':
+                setSmartReminders(!smartReminders);
+                saveSettings({ smartReminders: !smartReminders });
+                if (!smartReminders) {
+                    // Enabling
+                    registerForPushNotificationsAsync().then(token => {
+                        if (token) {
+                            scheduleDailyReminder();
+                            scheduleDailyReminder();
+                            showInfo("Reminders Set", "You'll be reminded daily at 8 PM to check your habits.", "✅");
+                        } else {
+                            // Permission denied or error
+                            setSmartReminders(false); // Revert switch if failed
+                            saveSettings({ smartReminders: false });
+                            showInfo("Permission Required", "Please enable notifications in settings to use Smart Reminders.", "🚫");
+                        }
+                    });
+                } else {
+                    // Disabling
+                    cancelReminders();
+                }
+                break;
+            case 'haptics':
+                const newHaptics = !hapticsEnabled;
+                setHapticsEnabled(newHaptics);
+                saveSettings({ hapticsEnabled: newHaptics });
+                updateFeedbackSettings(newHaptics, soundEnabled);
+                break;
+            case 'sound':
+                const newSound = !soundEnabled;
+                setSoundEnabled(newSound);
+                saveSettings({ soundEnabled: newSound });
+                updateFeedbackSettings(hapticsEnabled, newSound);
+                break;
+            case 'auth':
+                // setAuthEnabled(!authEnabled);
+                break;
+            case 'theme':
+                toggleTheme();
+                saveSettings({ darkMode: theme !== 'dark' });
+                break;
+        }
+    };
+
+    const handleImport = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true
+            });
+
+            if (result.canceled) return;
+
+            const file = result.assets[0];
+            const fileContent = await FileSystem.readAsStringAsync(file.uri);
+
+            try {
+                const parsedData = JSON.parse(fileContent);
+                const success = await importData(parsedData);
+
+                if (success) {
+                    triggerNotificationHaptic(FeedbackType.Success);
+                    showInfo("Import Successful", "Your data has been restored.", "💾");
+                } else {
+                    throw new Error("Invalid data format");
+                }
+            } catch (e) {
+                triggerNotificationHaptic(FeedbackType.Error);
+                showInfo("Import Failed", "The selected file is not a valid backup.", "⚠️");
+            }
+        } catch (error) {
+            console.error(error);
+            showInfo("Import Failed", "Could not read the file.", "📂");
+        }
+    };
+
+    // Reset Modal state
+    const [showResetModal, setShowResetModal] = useState(false);
+    // Management Mode state eliminated - Always in management mode for settings
 
     // Modal state
     const [modalVisible, setModalVisible] = useState(false);
     const [modalContent, setModalContent] = useState({ title: '', message: '', emoji: '' });
 
+    // Test Notification Modal specific state
+    const [showTestModal, setShowTestModal] = useState(false);
+
+    // Language picker state
+    const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+
     // Confetti state
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiType, setConfettiType] = useState<'completion' | 'levelUp' | 'streak'>('completion');
 
-    // Pick a random quote (changes each time component mounts)
-    const randomQuote = useMemo(() => {
-        const index = Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length);
-        return MOTIVATIONAL_QUOTES[index];
+    // Pick a random quote index (changes each time component mounts)
+    const quoteIndex = useMemo(() => {
+        return Math.floor(Math.random() * 10) + 1; // quote1 to quote10
     }, []);
 
+    // Get translated quote
+    const randomQuote = useMemo(() => {
+        const quoteKey = `quote${quoteIndex}` as keyof typeof t.quotes;
+        return t.quotes[quoteKey];
+    }, [t, quoteIndex]);
+
     // Calculate stats
-    const completedToday = habits.filter(h => (h.completions[todayKey] || 0) >= h.dailyTarget).length;
-    const totalHabits = habits.length;
+    const activeHabits = habits.filter(h => !h.archived);
+    const completedToday = activeHabits.filter(h => (h.completions[todayKey] || 0) >= h.dailyTarget).length;
+    const totalHabits = activeHabits.length;
     const completionRate = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
-    const totalStreakDays = habits.reduce((sum, h) => sum + h.streak, 0);
-    const bestStreak = habits.length > 0 ? Math.max(...habits.map(h => h.streak)) : 0;
+
+    // Consistency Score (Last 30 days)
+    const consistencyScore = useMemo(() => {
+        if (activeHabits.length === 0) return 0;
+        const now = new Date();
+        let totalPossible = 0;
+        let totalCompleted = 0;
+
+        for (let i = 0; i < 30; i++) {
+            const d = new Date();
+            d.setDate(now.getDate() - i);
+            const key = d.toISOString().split('T')[0];
+
+            activeHabits.forEach(h => {
+                // Approximate: Check if habit was created before this date? 
+                // For simplicity/performance, assume active habits tracking applies to window
+                // Or check createdAt if string comparison works (ISO strings do)
+                // Check if habit existed on this date (compare YYYY-MM-DD)
+                if (h.createdAt.substring(0, 10) <= key) {
+                    totalPossible++;
+                    if ((h.completions[key] || 0) >= h.dailyTarget) {
+                        totalCompleted++;
+                    }
+                }
+            });
+        }
+
+        return totalPossible === 0 ? 0 : Math.round((totalCompleted / totalPossible) * 100);
+    }, [activeHabits]);
+
+    const handleExport = async () => {
+        try {
+            const data = {
+                habits,
+                userStats,
+                exportedAt: new Date().toISOString(),
+                appVersion: '1.7.0'
+            };
+            await Share.share({
+                message: JSON.stringify(data, null, 2),
+                title: 'HabitFlow Data Export'
+            });
+        } catch (error) {
+            // Ignore
+        }
+    };
 
     // Handle last action (show confetti)
     React.useEffect(() => {
@@ -81,165 +271,160 @@ export default function WidgetHub() {
         setModalVisible(true);
     };
 
-    const renderItem = useCallback(({ item: habit, drag, isActive }: RenderItemParams<Habit>) => {
-        const progress = habit.completions[todayKey] || 0;
-        const isComplete = progress >= habit.dailyTarget;
-        const isExplicitlyFailed = habit.explicitFailures?.[todayKey] || false;
-        const themeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
 
-        return (
-            <ScaleDecorator>
-                <TouchableOpacity
-                    key={habit.id}
-                    activeOpacity={0.7}
-                    onLongPress={drag}
-                    delayPressIn={0}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={[
-                        styles.quickAction,
-                        { borderColor: themeColor + '30' }, // Always show subtle border
-                        isComplete && { borderColor: themeColor },
-                        isActive && {
-                            zIndex: 100,
-                            opacity: 0.9,
-                            transform: [{ scale: 1.05 }],
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 10 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 20,
-                            elevation: 10
-                        }
-                    ]}
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        requestAnimationFrame(() => {
-                            toggleHabitCompletion(habit.id);
-                        });
-                    }}
-                >
-                    <View style={[styles.quickActionIcon, { backgroundColor: themeColor + '20' }]}>
-                        <Text style={styles.quickActionEmoji}>{habit.icon}</Text>
-                    </View>
-                    <View style={styles.quickActionInfo}>
-                        <Text style={styles.quickActionName} numberOfLines={1}>{habit.name}</Text>
-                        <Text style={styles.quickActionProgress}>
-                            {progress}/{habit.dailyTarget} • {habit.streak}🔥
-                        </Text>
-                    </View>
-                    <View style={[
-                        styles.quickActionCheck,
-                        isComplete ? {
-                            backgroundColor: themeColor,
-                            shadowColor: themeColor,
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.5,
-                            shadowRadius: 12,
-                            elevation: 10
-                        } : isExplicitlyFailed ? {
-                            backgroundColor: colors.dangerStart || '#EF4444',
-                        } : { borderColor: themeColor + '40', borderWidth: 2 }
-                    ]}>
-                        {isComplete ? (
-                            <Text style={styles.checkMark}>✓</Text>
-                        ) : isExplicitlyFailed ? (
-                            <Text style={[styles.checkMark, { fontSize: 18 }]}>✕</Text>
-                        ) : null}
-                    </View>
-                </TouchableOpacity>
-            </ScaleDecorator>
-        );
-    }, [todayKey, toggleHabitCompletion]);
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const renderHeader = useCallback(() => (
         <View>
-            {/* Today's Progress */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>TODAY'S PROGRESS</Text>
-                <Pressable
-                    style={styles.progressCard}
-                    onPress={() => showInfo("Today's Progress", `You've completed ${completedToday} out of ${totalHabits} habits today. Keep going!`, '📊')}
-                >
-                    <LinearGradient
-                        colors={completionRate === 100 ? [...colors.success] : [...colors.primary]}
-                        style={styles.progressGradient}
-                    >
-                        <Text style={styles.progressPercent}>{completionRate}%</Text>
-                        <Text style={styles.progressLabel}>{completedToday}/{totalHabits} habits done</Text>
-                        {completionRate === 100 && (
-                            <Text style={styles.perfectDay}>🎉 Perfect Day!</Text>
-                        )}
-                    </LinearGradient>
-                </Pressable>
+            {/* Screen Title */}
+            <View style={styles.screenHeader}>
+                <Text style={styles.screenTitle}>{t.settings.title}</Text>
             </View>
 
-            {/* Quick Stats Grid */}
+            {/* Momentum / Stats */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>QUICK STATS</Text>
-                <View style={styles.statsGrid}>
-                    <Pressable
-                        style={styles.statCard}
-                        onPress={() => showInfo("Level Info", `You're Level ${levelInfo.level}! Earn XP by completing habits. ${levelInfo.xpNeeded - levelInfo.currentXp} XP until next level.`, '⭐')}
-                    >
-                        <Text style={styles.statEmoji}>⭐</Text>
-                        <Text style={styles.statValue}>Level {levelInfo.level}</Text>
-                        <Text style={styles.statLabel}>{userStats.totalXp} XP</Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={styles.statCard}
-                        onPress={() => showInfo("Best Streak", `Your longest current streak is ${bestStreak} days. Keep the momentum going!`, '🔥')}
-                    >
-                        <Text style={styles.statEmoji}>🔥</Text>
-                        <Text style={styles.statValue}>{bestStreak}</Text>
-                        <Text style={styles.statLabel}>Best Streak</Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={styles.statCard}
-                        onPress={() => showInfo("Total Habits", `You're tracking ${totalHabits} habits. Good discipline!`, '📊')}
-                    >
-                        <Text style={styles.statEmoji}>📊</Text>
-                        <Text style={styles.statValue}>{totalHabits}</Text>
-                        <Text style={styles.statLabel}>Habits</Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={styles.statCard}
-                        onPress={() => showInfo("Combined Streaks", `Your combined streak days across all habits: ${totalStreakDays} days!`, '📈')}
-                    >
-                        <Text style={styles.statEmoji}>📈</Text>
-                        <Text style={styles.statValue}>{totalStreakDays}</Text>
-                        <Text style={styles.statLabel}>Total Days</Text>
-                    </Pressable>
+                <View style={styles.statBig}>
+                    <Text style={styles.statBigValue}>{consistencyScore}%</Text>
+                    <Text style={styles.statBigLabel}>Consistency Score (Last 30 Days)</Text>
                 </View>
             </View>
 
-            {/* Quick Actions Title */}
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-            </View>
         </View>
-    ), [completedToday, totalHabits, completionRate, levelInfo, userStats, bestStreak, totalStreakDays]);
+    ), [consistencyScore, t, styles]);
 
     const renderFooter = useCallback(() => (
         <View>
-            <View style={{ height: spacing.xl }} />
-            {/* Motivational Quote */}
+            {/* Level Info (Low Priority) */}
+            <View style={{ alignItems: 'center', marginBottom: spacing.xl }}>
+                <Text style={{ ...typography.caption, color: colors.textMuted }}>
+                    Level {levelInfo.level} • {userStats.totalXp} XP
+                </Text>
+            </View>
+
+            {/* App Settings */}
             <View style={styles.section}>
-                <Pressable
-                    style={styles.quoteCard}
+                <Text style={styles.sectionTitle}>APP EXPERIENCE</Text>
+
+                <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔔</Text>  Smart Reminders</Text>
+                        <Text style={styles.settingDesc}>Get reminded when you forget</Text>
+                    </View>
+                    <Switch
+                        value={smartReminders}
+                        onValueChange={() => toggleSetting('smartReminders')}
+                        trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                        thumbColor={'#fff'}
+                    />
+                </View>
+
+                {smartReminders && (
+                    <TouchableOpacity
+                        style={[styles.exportButton, { marginBottom: spacing.md, paddingVertical: 8, borderColor: colors.glassBorder }]}
+                        onPress={async () => {
+                            triggerSelectionHaptic();
+                            await registerForPushNotificationsAsync();
+                            await scheduleTestNotification();
+                            setShowTestModal(true);
+                        }}
+                    >
+                        <Text style={[styles.exportButtonText, { fontSize: 12, color: colors.textSecondary }]}>Test Notification (5s)</Text>
+                    </TouchableOpacity>
+                )}
+
+                <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>📳</Text>  Haptic Feedback</Text>
+                    </View>
+                    <Switch
+                        value={hapticsEnabled}
+                        onValueChange={() => toggleSetting('haptics')}
+                        trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                        thumbColor={'#fff'}
+                    />
+                </View>
+
+                <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🔊</Text>  Sound Effects</Text>
+                    </View>
+                    <Switch
+                        value={soundEnabled}
+                        onValueChange={() => toggleSetting('sound')}
+                        trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                        thumbColor={'#fff'}
+                    />
+                </View>
+
+                <View style={styles.settingRow}>
+                    <View style={styles.settingInfo}>
+                        <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>🌓</Text>  Dark Mode</Text>
+                    </View>
+                    <Switch
+                        value={theme === 'dark'}
+                        onValueChange={() => toggleSetting('theme')}
+                        trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                        thumbColor={'#fff'}
+                    />
+                </View>
+            </View>
+
+            {/* Language Selector */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t.settings.language.toUpperCase()}</Text>
+                <View style={styles.languageContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.languageScroll}>
+                        {supportedLanguages.map((lang) => (
+                            <Pressable
+                                key={lang}
+                                style={[
+                                    styles.languageOption,
+                                    language === lang && styles.languageOptionActive,
+                                ]}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setLanguage(lang);
+                                }}
+                            >
+                                <Text style={styles.languageFlag}>{languageFlags[lang]}</Text>
+                                <Text style={[
+                                    styles.languageName,
+                                    language === lang && styles.languageNameActive,
+                                ]}>
+                                    {languageNames[lang]}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </ScrollView>
+                </View>
+            </View>
+
+            {/* Data Export & Reset */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>DATA & PRIVACY</Text>
+
+                <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
+                    <Text style={styles.exportButtonText}>Download Your Data (JSON)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleImport}>
+                    <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>Import Data (JSON)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.resetButton}
                     onPress={() => {
-                        Haptics.selectionAsync();
-                        showInfo("Keep Going! 💪", "Every day is a new opportunity to build the life you want. Small actions lead to big changes.", "💪");
+                        triggerNotificationHaptic(FeedbackType.Warning);
+                        setShowResetModal(true);
                     }}
                 >
-                    <Text style={styles.quoteText}>"{randomQuote.text}"</Text>
-                    <Text style={styles.quoteAuthor}>— {randomQuote.author}</Text>
-                </Pressable>
+                    <Ionicons name="trash-outline" size={18} color={colors.dangerStart} />
+                    <Text style={styles.resetButtonText}>{t.stats.resetData}</Text>
+                </TouchableOpacity>
             </View>
-            <View style={{ height: 40 }} />
+            <View style={{ height: 80 }} />
         </View>
-    ), [randomQuote]);
+    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, hapticsEnabled, soundEnabled, theme]);
 
     return (
         <GestureHandlerRootView style={styles.container}>
@@ -248,22 +433,18 @@ export default function WidgetHub() {
                 type={confettiType}
                 onComplete={() => setShowConfetti(false)}
             />
-            {/* Using key={totalHabits} to force re-render if count changes, simpler than extra refresh control logic */}
-            <DraggableFlatList
-                data={habits}
-                onDragEnd={({ data }) => reorderHabits(data)}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                ListHeaderComponent={renderHeader}
-                ListFooterComponent={renderFooter}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No habits yet. Add some habits to see quick actions here!</Text>
-                    </View>
-                }
+
+            <ScrollView
+                style={styles.container}
                 contentContainerStyle={styles.content}
-                ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-            />
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Header stats section */}
+                {renderHeader()}
+
+                {/* Footer with settings */}
+                {renderFooter()}
+            </ScrollView>
 
             <StyledModal
                 visible={modalVisible}
@@ -272,17 +453,52 @@ export default function WidgetHub() {
                 emoji={modalContent.emoji}
                 onClose={() => setModalVisible(false)}
             />
+
+            <StyledModal
+                visible={showTestModal}
+                title="Test Sent"
+                message={"Notification scheduled for 5 seconds from now.\n\nPlease close the app (go to home screen) to see it."}
+                emoji="🔔"
+                onClose={() => setShowTestModal(false)}
+                buttonText="Okay"
+            />
+
+            <ConfirmationModal
+                visible={showResetModal}
+                title={t.stats.resetData}
+                message={t.stats.resetWarning}
+                confirmLabel={t.common.yes}
+                cancelLabel={t.common.cancel}
+                type="danger"
+                onConfirm={() => {
+                    setShowResetModal(false);
+                    triggerNotificationHaptic(FeedbackType.Success);
+                    resetApp();
+                }}
+                onCancel={() => setShowResetModal(false)}
+            />
         </GestureHandlerRootView>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
     },
     content: {
         padding: spacing.md,
+    },
+    screenHeader: {
+        paddingTop: 50,
+        paddingBottom: spacing.lg,
+        alignItems: 'center',
+    },
+    screenTitle: {
+        ...typography.h1,
+        color: colors.textPrimary,
+        fontSize: 28,
+        fontWeight: '800',
     },
     section: {
         marginBottom: spacing.xl,
@@ -319,73 +535,60 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
         marginTop: spacing.md,
     },
-    statsGrid: {
+    statsRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.sm,
+        gap: spacing.md,
+        marginTop: spacing.sm,
     },
-    statCard: {
+    statBig: {
         flex: 1,
-        minWidth: '45%',
         backgroundColor: colors.bgCard,
         borderRadius: borderRadius.md,
         padding: spacing.md,
         alignItems: 'center',
     },
-    statEmoji: {
-        fontSize: 24,
+    statBigValue: {
+        ...typography.h2,
+        color: colors.textPrimary,
         marginBottom: spacing.xs,
     },
-    statValue: {
-        ...typography.h3,
-        color: colors.textPrimary,
-    },
-    statLabel: {
+    statBigLabel: {
         ...typography.caption,
         color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontSize: 10,
     },
-    quickAction: {
+    exportButton: {
+        backgroundColor: colors.glass,
+        borderColor: colors.primaryStart,
+        borderWidth: 1,
+        padding: spacing.md,
+        borderRadius: borderRadius.md,
+        alignItems: 'center',
+    },
+    exportButtonText: {
+        ...typography.bodyBold,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        color: colors.primaryStart,
+    },
+    resetButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.md,
+        justifyContent: 'center',
+        gap: spacing.sm,
         padding: spacing.md,
-        gap: spacing.md,
-        borderWidth: 2,
-        borderColor: 'transparent',
+        borderRadius: borderRadius.md,
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.2)',
+        marginTop: spacing.md,
     },
-    quickActionIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    quickActionEmoji: {
-        fontSize: 22,
-    },
-    quickActionInfo: {
-        flex: 1,
-    },
-    quickActionName: {
+    resetButtonText: {
         ...typography.bodyBold,
-        color: colors.textPrimary,
-    },
-    quickActionProgress: {
-        ...typography.caption,
-        color: colors.textMuted,
-    },
-    quickActionCheck: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkMark: {
-        color: '#fff',
-        fontWeight: '800',
-        fontSize: 16,
+        color: colors.dangerStart,
+        fontWeight: '700',
     },
     emptyState: {
         backgroundColor: colors.bgCard,
@@ -417,5 +620,60 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         textAlign: 'center',
         marginTop: spacing.md,
+    },
+    languageContainer: {
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.md,
+        padding: spacing.sm,
+    },
+    languageScroll: {
+        gap: spacing.sm,
+    },
+    languageOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: borderRadius.sm,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        gap: spacing.xs,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    languageOptionActive: {
+        borderColor: colors.primaryStart,
+        backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    },
+    languageFlag: {
+        fontSize: 20,
+    },
+    languageName: {
+        ...typography.body,
+        color: colors.textSecondary,
+    },
+    languageNameActive: {
+        color: colors.textPrimary,
+        fontWeight: '600',
+    },
+    settingRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+        marginBottom: spacing.xs,
+    },
+    settingInfo: {
+        flex: 1,
+        marginRight: spacing.md,
+    },
+    settingLabel: {
+        ...typography.body,
+        color: colors.textPrimary,
+        fontWeight: '500',
+    },
+    settingDesc: {
+        ...typography.caption,
+        color: colors.textMuted,
+        marginTop: 2,
     },
 });

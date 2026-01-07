@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitFlow",
     "slug": "HabitFlow",
-    "version": "1.6.0",
+    "version": "1.8.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,13 +23,25 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ianskaitis.HabitFlow",
-      "versionCode": 6
+      "versionCode": 9
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ec8f799b-14e4-4544-999b-46403a56c8c5"
+      }
+    }
   }
 }

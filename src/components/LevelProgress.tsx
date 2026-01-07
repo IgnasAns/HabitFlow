@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -8,8 +8,9 @@ import Animated, {
     useSharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { colors, spacing, borderRadius } from '../theme';
+import { triggerSelectionHaptic } from '../utils/feedback';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius } from '../theme';
 import StyledModal from './StyledModal';
 
 interface LevelProgressProps {
@@ -27,6 +28,9 @@ const LevelProgress = React.memo(({
     totalXp,
     onPress
 }: LevelProgressProps) => {
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
+
     const scaleAnim = useSharedValue(1);
     const progressWidth = useSharedValue(0);
     const lastLevel = useSharedValue(level);
@@ -61,7 +65,7 @@ const LevelProgress = React.memo(({
     }));
 
     const handlePress = () => {
-        Haptics.selectionAsync();
+        triggerSelectionHaptic();
         if (onPress) {
             onPress();
         } else {
@@ -82,7 +86,7 @@ const LevelProgress = React.memo(({
                 <View style={styles.header}>
                     <Animated.View style={levelStyle}>
                         <LinearGradient
-                            colors={[...colors.gold]}
+                            colors={[colors.goldStart, colors.goldEnd]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={styles.levelBadge}
@@ -93,15 +97,15 @@ const LevelProgress = React.memo(({
                     </Animated.View>
 
                     <View style={styles.xpInfo}>
-                        <Text style={styles.xpText}>{currentXp} / {xpNeeded} XP</Text>
-                        <Text style={styles.totalXp}>Total: {totalXp} XP</Text>
+                        <Text style={styles.xpText}>{totalXp} XP</Text>
+                        <Text style={styles.totalXp}>{xpNeeded - currentXp} XP to Level {level + 1}</Text>
                     </View>
                 </View>
 
                 <View style={styles.progressBar}>
                     <Animated.View style={[styles.progressFill, progressStyle]}>
                         <LinearGradient
-                            colors={[...colors.gold]}
+                            colors={[colors.goldStart, colors.goldEnd]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={styles.progressGradient}
@@ -124,7 +128,8 @@ const LevelProgress = React.memo(({
 
 export default LevelProgress;
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         padding: spacing.md,
         backgroundColor: colors.glass,

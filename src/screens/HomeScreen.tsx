@@ -7,21 +7,27 @@ import {
     RefreshControl,
     ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeInUp,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { triggerHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
-import { colors, spacing, borderRadius, typography } from '../theme';
+import { useI18n } from '../context/I18nContext';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography } from '../theme';
 import HabitCard from '../components/HabitCard';
-import LevelProgress from '../components/LevelProgress';
+import HabitListItem from '../components/HabitListItem';
 import ConfettiOverlay from '../components/ConfettiOverlay';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { Habit } from '../types';
+
+type ViewMode = 'card' | 'list' | 'monthly';
+const VIEW_MODE_KEY = '@view_mode';
 
 interface HomeScreenProps {
     navigation: NativeStackNavigationProp<any>;
@@ -33,17 +39,40 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         isLoading,
         toggleHabitCompletion,
         incrementHabitProgress,
-        levelInfo,
-        userStats,
         lastAction,
         clearLastAction,
         refreshData,
         reorderHabits,
     } = useHabits();
+    const { t } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiType, setConfettiType] = useState<'completion' | 'levelUp' | 'streak'>('completion');
     const [refreshing, setRefreshing] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+    // Load view mode preference on mount
+    useEffect(() => {
+        AsyncStorage.getItem(VIEW_MODE_KEY).then((saved) => {
+            if (saved === 'card' || saved === 'list' || saved === 'monthly') {
+                setViewMode(saved as ViewMode);
+            }
+        });
+    }, []);
+
+    // Toggle view mode
+    const toggleViewMode = useCallback(() => {
+        let newMode: ViewMode = 'list';
+        if (viewMode === 'list') newMode = 'monthly';
+        else if (viewMode === 'monthly') newMode = 'card';
+
+        setViewMode(newMode);
+        setViewMode(newMode);
+        AsyncStorage.setItem(VIEW_MODE_KEY, newMode);
+        triggerHaptic();
+    }, [viewMode]);
 
     // Stable handlers for HabitCard performance
     const handleToggle = useCallback((id: string, dateKey?: string) => {
@@ -64,7 +93,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             if (lastAction.leveledUp) {
                 setConfettiType('levelUp');
                 setShowConfetti(true);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                triggerNotificationHaptic(FeedbackType.Success);
             } else if (lastAction.habit?.streak && lastAction.habit.streak > 0 && lastAction.habit.streak % 7 === 0) {
                 setConfettiType('streak');
                 setShowConfetti(true);
@@ -80,6 +109,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     };
 
     const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<Habit>) => {
+        if (viewMode === 'list' || viewMode === 'monthly') {
+            return (
+                <ScaleDecorator activeScale={1.02}>
+                    <HabitListItem
+                        habit={item}
+                        onToggle={handleToggle}
+                        onPress={handleEdit}
+                        drag={drag}
+                        isActive={isActive}
+                        daysToShow={viewMode === 'monthly' ? 30 : 7}
+                    />
+                </ScaleDecorator>
+            );
+        }
+
         return (
             <ScaleDecorator activeScale={1.05}>
                 <View style={{ marginBottom: 0 }}>
@@ -94,21 +138,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 </View>
             </ScaleDecorator>
         );
-    }, [handleToggle, handleIncrement, handleEdit]);
+    }, [handleToggle, handleIncrement, handleEdit, viewMode]);
 
-    // Memoize header to prevent unnecessary re-renders during interactions/list updates
-    const headerComponent = useMemo(() => (
-        <View style={{ marginBottom: 10 }}>
-            <Animated.View entering={FadeInUp.delay(500)}>
-                <LevelProgress
-                    level={levelInfo.level}
-                    currentXp={levelInfo.currentXp}
-                    xpNeeded={levelInfo.xpNeeded}
-                    totalXp={userStats.totalXp}
-                />
-            </Animated.View>
-        </View>
-    ), [levelInfo, userStats.totalXp]);
+    // Header spacer for list
+    const headerComponent = useMemo(() => <View style={{ height: 10 }} />, []);
 
     // Memoize empty state
     const emptyComponent = useMemo(() => (
@@ -117,26 +150,26 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             style={styles.emptyState}
         >
             <Text style={styles.emptyIcon}>🎯</Text>
-            <Text style={styles.emptyTitle}>No habits yet</Text>
+            <Text style={styles.emptyTitle}>{t.home.noHabitsYet}</Text>
             <Text style={styles.emptyText}>
-                Start building better habits today!
+                {t.home.startBuilding}
             </Text>
             <Pressable
                 style={styles.emptyButton}
                 onPress={() => navigation.navigate('AddHabit')}
             >
                 <LinearGradient
-                    colors={[...colors.primary]}
+                    colors={[colors.primaryStart, colors.primaryEnd]} // Use explicit colors from context
                     style={styles.emptyButtonGradient}
                 >
-                    <Text style={styles.emptyButtonText}>Add Your First Habit</Text>
+                    <Text style={styles.emptyButtonText}>{t.home.addFirstHabit}</Text>
                 </LinearGradient>
             </Pressable>
         </Animated.View>
-    ), [navigation]);
+    ), [navigation, t]);
 
-    // Memoize footer spacer
-    const footerComponent = useMemo(() => <View style={{ height: 40 }} />, []);
+    // Memoize footer spacer - larger to account for safe area insets
+    const footerComponent = useMemo(() => <View style={{ height: 100 }} />, []);
 
     if (isLoading) {
         return (
@@ -159,7 +192,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <View style={styles.topBar}>
                     <View>
                         <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('WidgetHub')}>
-                            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
+                            <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
                         </Pressable>
                     </View>
 
@@ -167,18 +200,27 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
                     <View style={styles.topRight}>
                         <View>
+                            <Pressable style={styles.iconBtn} onPress={toggleViewMode}>
+                                <Ionicons
+                                    name={viewMode === 'list' ? 'calendar-outline' : viewMode === 'monthly' ? 'grid-outline' : 'list-outline'}
+                                    size={22}
+                                    color={colors.textPrimary}
+                                />
+                            </Pressable>
+                        </View>
+                        <View>
                             <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Share')}>
-                                <Ionicons name="share-social-outline" size={24} color="#FFFFFF" />
+                                <Ionicons name="share-social-outline" size={24} color={colors.textPrimary} />
                             </Pressable>
                         </View>
                         <View>
                             <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Stats')}>
-                                <Ionicons name="stats-chart" size={22} color="#FFFFFF" />
+                                <Ionicons name="stats-chart" size={22} color={colors.textPrimary} />
                             </Pressable>
                         </View>
                         <View>
                             <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('AddHabit')}>
-                                <Ionicons name="add" size={30} color="#FFFFFF" />
+                                <Ionicons name="add" size={30} color={colors.textPrimary} />
                             </Pressable>
                         </View>
                     </View>
@@ -186,6 +228,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
                 {/* Draggable List */}
                 <DraggableFlatList
+                    containerStyle={{ flex: 1 }}
                     data={habits}
                     onDragEnd={({ data }) => reorderHabits(data)}
                     keyExtractor={(item) => item.id}
@@ -208,7 +251,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

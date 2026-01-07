@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -19,9 +19,11 @@ import Animated, {
     SharedValue,
     Layout,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType, ImpactStyle } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
-import { colors, spacing, borderRadius, typography, habitIcons } from '../theme';
+import { useI18n } from '../context/I18nContext';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography, habitIcons } from '../theme';
 import StreakBadge from '../components/StreakBadge';
 import ConfirmationModal from '../components/ConfirmationModal';
 import HabitCircleCalendar from '../components/HabitCircleCalendar';
@@ -35,9 +37,12 @@ interface EditHabitScreenProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function EditHabitScreen({ navigation, route }: EditHabitScreenProps) {
-    const { habits, updateHabit, deleteHabit } = useHabits();
+export default function EditHabitScreen({ route, navigation }: EditHabitScreenProps) {
     const { habitId } = route.params;
+    const { habits, updateHabit, deleteHabit } = useHabits();
+    const { t } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const habit = habits.find(h => h.id === habitId);
 
@@ -62,11 +67,11 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
 
     const handleSave = async () => {
         if (!name.trim()) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            triggerNotificationHaptic(FeedbackType.Error);
             return;
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        triggerNotificationHaptic(FeedbackType.Success);
 
         await updateHabit(habitId, {
             name: name.trim(),
@@ -81,7 +86,7 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
     };
 
     const handleDelete = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        triggerHaptic(ImpactStyle.Medium);
         setShowDeleteModal(true);
     };
 
@@ -208,7 +213,7 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
                                 active={selectedIcon === icon}
                                 style={styles.iconButton}
                                 onPress={() => {
-                                    Haptics.selectionAsync();
+                                    triggerSelectionHaptic();
                                     setSelectedIcon(icon);
                                 }}
                             >
@@ -231,7 +236,7 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
                                 active={selectedColor === index}
                                 style={[styles.colorButton, selectedColor === index && styles.colorButtonActive]}
                                 onPress={() => {
-                                    Haptics.selectionAsync();
+                                    triggerSelectionHaptic();
                                     setSelectedColor(index);
                                 }}
                             >
@@ -298,7 +303,7 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
                 type="danger"
                 onConfirm={async () => {
                     setShowDeleteModal(false);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    triggerNotificationHaptic(FeedbackType.Success);
                     await deleteHabit(habitId);
                     navigation.goBack();
                 }}
@@ -308,7 +313,8 @@ export default function EditHabitScreen({ navigation, route }: EditHabitScreenPr
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

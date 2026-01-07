@@ -13,6 +13,7 @@ export interface Habit {
     completions: Record<string, number>; // dateKey -> count
     explicitFailures: Record<string, boolean>; // dateKey -> true if explicitly marked as 'x'
     streak: number;
+    archived?: boolean;
 }
 
 export interface UserStats {

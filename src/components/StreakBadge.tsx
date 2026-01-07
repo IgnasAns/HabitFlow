@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -7,7 +7,8 @@ import Animated, {
     useSharedValue,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, typography, spacing } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { typography, spacing } from '../theme';
 
 type BadgeSize = 'small' | 'medium' | 'large';
 
@@ -29,6 +30,9 @@ const sizeConfigs: Record<BadgeSize, SizeConfig> = {
 };
 
 export default function StreakBadge({ streak = 0, size = 'small' }: StreakBadgeProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
+
     const scale = useSharedValue(1);
     const lastStreak = useSharedValue(streak);
 
@@ -66,7 +70,8 @@ export default function StreakBadge({ streak = 0, size = 'small' }: StreakBadgeP
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -75,7 +80,7 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     active: {
-        backgroundColor: 'rgba(255, 120, 0, 0.15)',
+        backgroundColor: colors.streakStart ? colors.streakStart + '25' : 'rgba(255, 120, 0, 0.15)',
     },
     inactive: {
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -84,10 +89,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     text: {
-        color: '#FFFFFF',
+        color: colors.textPrimary,
         fontWeight: '700',
     },
     inactiveText: {
-        color: 'rgba(255, 255, 255, 0.4)',
+        color: colors.textSecondary,
     },
 });

@@ -8,6 +8,10 @@
                 "buildType": "apk"
             }
         },
-        "production": {}
+        "production": {
+            "android": {
+                "credentialsSource": "local"
+            }
+        }
     }
 }

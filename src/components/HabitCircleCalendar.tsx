@@ -7,7 +7,8 @@ import Animated, {
     withDelay,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, borderRadius } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius } from '../theme';
 import { getDateKey } from '../utils/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -44,11 +45,13 @@ interface DayData {
 const CircleDay = memo(({
     day,
     index,
-    gradientColors
+    gradientColors,
+    styles
 }: {
     day: DayData;
     index: number;
     gradientColors: readonly [string, string];
+    styles: any;
 }) => {
     const progressRatio = Math.min(1, day.progress / day.dailyTarget);
     const hasProgress = day.progress > 0;
@@ -93,6 +96,9 @@ const HabitCircleCalendar = memo(({
     gradientColors,
     daysToShow = DAYS_TO_SHOW,
 }: HabitCircleCalendarProps) => {
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
+
     const days = useMemo(() => {
         const today = new Date();
         const todayKey = getDateKey(today);
@@ -172,6 +178,7 @@ const HabitCircleCalendar = memo(({
                                 day={day}
                                 index={weekIndex * CIRCLES_PER_ROW + dayIndex}
                                 gradientColors={gradientColors}
+                                styles={styles}
                             />
                         ))}
                         {/* Fill empty spaces if needed */}
@@ -210,7 +217,8 @@ const HabitCircleCalendar = memo(({
 
 export default HabitCircleCalendar;
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         backgroundColor: colors.glass,
         borderRadius: borderRadius.lg,
@@ -283,9 +291,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     circleEmpty: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: colors.emptyCell,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: colors.glassBorder,
     },
     circleCompleted: {
         elevation: 3,
@@ -338,9 +346,9 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     circleTodayLegend: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: colors.emptyCell,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
+        borderColor: colors.textPrimary,
         justifyContent: 'center',
         alignItems: 'center',
     },

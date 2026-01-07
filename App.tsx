@@ -1,14 +1,36 @@
 import React, { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as NavigationBar from 'expo-navigation-bar';
 import { HabitProvider } from './src/context/HabitContext';
+import { I18nProvider } from './src/context/I18nContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme';
 
+import { initFeedbackSettings } from './src/utils/feedback';
+import { registerForPushNotificationsAsync } from './src/utils/notifications';
+
+// Set notification handler to allow notifications when app is in foreground
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+    } as any),
+});
+
 export default function App() {
     useEffect(() => {
+        // Initialize settings
+        initFeedbackSettings();
+        registerForPushNotificationsAsync();
+
         // Make Android fully immersive - hide navigation bar completely
         if (Platform.OS === 'android') {
             // Use dark background color that matches the app
@@ -22,12 +44,16 @@ export default function App() {
 
     return (
         <GestureHandlerRootView style={styles.container}>
-            <HabitProvider>
-                <View style={styles.container}>
-                    <StatusBar style="light" hidden={false} translucent backgroundColor="transparent" />
-                    <AppNavigator />
-                </View>
-            </HabitProvider>
+            <ThemeProvider>
+                <I18nProvider>
+                    <HabitProvider>
+                        <View style={styles.container}>
+                            <StatusBar style="light" hidden={false} translucent backgroundColor="transparent" />
+                            <AppNavigator />
+                        </View>
+                    </HabitProvider>
+                </I18nProvider>
+            </ThemeProvider>
         </GestureHandlerRootView>
     );
 }

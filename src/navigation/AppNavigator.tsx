@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { colors, spacing, borderRadius } from '../theme';
+import { colors as defaultColors, spacing, borderRadius } from '../theme'; // Keep imports for spacing
+import { useTheme } from '../context/ThemeContext';
 
 // Screens
 import HomeScreen from '../screens/HomeScreen';
@@ -27,20 +28,24 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Custom theme
-const navTheme = {
-    ...DefaultTheme,
-    colors: {
-        ...DefaultTheme.colors,
-        background: colors.bgDark,
-        card: colors.bgCard,
-        text: colors.textPrimary,
-        border: colors.glassBorder,
-        primary: colors.primaryStart,
-    },
-};
+// Custom theme moved inside component
 
 // Root Navigator - No more bottom tabs
 export default function AppNavigator() {
+    const { colors } = useTheme();
+
+    const navTheme = {
+        ...DefaultTheme,
+        colors: {
+            ...DefaultTheme.colors,
+            background: colors.bgDark,
+            card: colors.bgCard,
+            text: colors.textPrimary,
+            border: colors.glassBorder,
+            primary: colors.primaryStart,
+        },
+    };
+
     return (
         <NavigationContainer theme={navTheme}>
             <Stack.Navigator
@@ -67,7 +72,7 @@ export default function AppNavigator() {
                     name="AddHabit"
                     component={AddHabitScreen}
                     options={{
-                        title: 'New Habit',
+                        headerShown: false,
                         presentation: 'modal',
                         animation: 'fade_from_bottom',
                     }}
@@ -76,7 +81,7 @@ export default function AppNavigator() {
                     name="EditHabit"
                     component={EditHabitScreen}
                     options={{
-                        title: 'Edit Habit',
+                        headerShown: false,
                         presentation: 'modal',
                         animation: 'fade_from_bottom',
                     }}
@@ -85,7 +90,7 @@ export default function AppNavigator() {
                     name="Stats"
                     component={StatsScreen}
                     options={{
-                        title: 'Statistics',
+                        headerShown: false,
                         presentation: 'modal',
                         animation: 'fade_from_bottom',
                     }}
@@ -94,7 +99,7 @@ export default function AppNavigator() {
                     name="WidgetHub"
                     component={WidgetHub}
                     options={{
-                        title: 'Settings',
+                        headerShown: false,
                         presentation: 'modal',
                         animation: 'fade_from_bottom',
                     }}

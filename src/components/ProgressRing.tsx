@@ -6,7 +6,7 @@ import Animated, {
     withSpring,
     useSharedValue,
 } from 'react-native-reanimated';
-import { colors } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -23,10 +23,13 @@ export default function ProgressRing({
     progress = 0,
     size = 80,
     strokeWidth = 8,
-    gradientColors = colors.primary,
+    gradientColors,
     showGlow = true,
     children,
 }: ProgressRingProps) {
+    const { colors } = useTheme();
+    const activeGradient = gradientColors || colors.primary;
+
     const animatedProgress = useSharedValue(0);
 
     const radius = (size - strokeWidth) / 2;
@@ -47,7 +50,7 @@ export default function ProgressRing({
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: gradientColors[0],
+        backgroundColor: activeGradient[0],
     };
 
     return (
@@ -58,8 +61,8 @@ export default function ProgressRing({
             <Svg width={size} height={size} style={styles.svg}>
                 <Defs>
                     <LinearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <Stop offset="0%" stopColor={gradientColors[0]} />
-                        <Stop offset="100%" stopColor={gradientColors[1]} />
+                        <Stop offset="0%" stopColor={activeGradient[0]} />
+                        <Stop offset="100%" stopColor={activeGradient[1]} />
                     </LinearGradient>
                 </Defs>
                 {/* Background circle */}

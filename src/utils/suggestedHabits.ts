@@ -1,5 +1,5 @@
 import { Habit } from '../types';
-import { colors } from '../theme';
+
 
 export interface SuggestedHabit {
     name: string;

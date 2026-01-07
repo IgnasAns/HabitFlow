@@ -1,8 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography, borderRadius, shadows } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, typography, borderRadius, shadows } from '../theme';
 import { useHabits } from '../context/HabitContext';
+import { useI18n } from '../context/I18nContext';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInUp } from 'react-native-reanimated';
@@ -15,8 +17,15 @@ const CARD_WIDTH = (width - (spacing.lg * 2) - (spacing.md * (COLUMN_count - 1))
 
 export default function ShareScreen({ navigation }: any) {
     const { habits, levelInfo, userStats } = useHabits();
+    const { t, language } = useI18n();
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
     const todayKey = getTodayKey();
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    // Dynamic locale for date
+    const localeMap: Record<string, string> = {
+        en: 'en-US', es: 'es-ES', de: 'de-DE', fr: 'fr-FR', pt: 'pt-BR'
+    };
+    const today = new Date().toLocaleDateString(localeMap[language] || 'en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     const viewShotRef = useRef<any>(null);
 
     const handleShare = async () => {
@@ -55,17 +64,17 @@ export default function ShareScreen({ navigation }: any) {
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
                                 <Text style={styles.statValue}>Lvl {levelInfo.level}</Text>
-                                <Text style={styles.statLabel}>Current Level</Text>
+                                <Text style={styles.statLabel}>{t.share.currentLevel}</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
                                 <Text style={styles.statValue}>{Math.max(0, ...habits.map(h => h.streak))}🔥</Text>
-                                <Text style={styles.statLabel}>Best Streak</Text>
+                                <Text style={styles.statLabel}>{t.share.bestStreak}</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
                                 <Text style={styles.statValue}>{habits.filter(h => (h.completions[todayKey] || 0) >= h.dailyTarget).length}/{habits.length}</Text>
-                                <Text style={styles.statLabel}>Done Today</Text>
+                                <Text style={styles.statLabel}>{t.share.doneToday}</Text>
                             </View>
                         </View>
 
@@ -107,7 +116,7 @@ export default function ShareScreen({ navigation }: any) {
                                             <View style={styles.cardInfo}>
                                                 <Text style={styles.habitName} numberOfLines={1}>{habit.name}</Text>
                                                 <Text style={styles.streakText}>
-                                                    <Text style={{ color: themeColor, fontWeight: 'bold' }}>{habit.streak}</Text> day streak
+                                                    <Text style={{ color: themeColor, fontWeight: 'bold' }}>{habit.streak}</Text> {t.share.dayStreak}
                                                 </Text>
                                             </View>
                                         </View>
@@ -119,7 +128,7 @@ export default function ShareScreen({ navigation }: any) {
                                                         const day = gridData[col * 7 + row];
                                                         if (!day) return null;
 
-                                                        let bg = 'rgba(255,255,255,0.05)';
+                                                        let bg = colors.emptyCell;
                                                         if (day.isExplicitlyFailed) bg = colors.dangerStart;
                                                         else if (day.progress > 0) bg = themeColor;
                                                         else if (day.isMissed) bg = 'rgba(255,100,100,0.15)';
@@ -153,7 +162,7 @@ export default function ShareScreen({ navigation }: any) {
 
                         {/* Footer Brand */}
                         <View style={styles.footer}>
-                            <Text style={styles.footerText}>Tracked with HabitFlow</Text>
+                            <Text style={styles.footerText}>{t.share.trackedWith}</Text>
                         </View>
                     </View>
                 </ViewShot>
@@ -178,7 +187,8 @@ export default function ShareScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

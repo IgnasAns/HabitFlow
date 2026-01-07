@@ -25,28 +25,42 @@ export const getDateKey = (date: Date): string => {
 export const calculateStreak = (completions: Record<string, number>, dailyTarget: number): number => {
     if (!completions) return 0;
 
-    const dates = Object.keys(completions).filter(k => completions[k] >= dailyTarget).sort().reverse();
-    if (dates.length === 0) return 0;
+    // Get all completed dates, filter by target, sort in reverse chronological order
+    const completedDates = Object.keys(completions)
+        .filter(k => completions[k] >= dailyTarget)
+        .sort()
+        .reverse();
+
+    if (completedDates.length === 0) return 0;
 
     const today = getTodayKey();
     const yesterday = getDateKey(new Date(Date.now() - 86400000));
 
-    // Check if completed today or yesterday to continue streak
-    if (dates[0] !== today && dates[0] !== yesterday) {
+    // Streak can only start from today or yesterday
+    if (completedDates[0] !== today && completedDates[0] !== yesterday) {
         return 0;
     }
 
     let streak = 1;
-    let currentDate = new Date(dates[0]);
 
-    for (let i = 1; i < dates.length; i++) {
-        const prevDate = new Date(currentDate);
-        prevDate.setDate(prevDate.getDate() - 1);
-        const prevKey = getDateKey(prevDate);
+    // Parse the first date properly - use local timezone
+    const parseDateKey = (key: string): Date => {
+        const [year, month, day] = key.split('-').map(Number);
+        return new Date(year, month - 1, day); // Month is 0-indexed
+    };
 
-        if (dates[i] === prevKey) {
+    let currentDate = parseDateKey(completedDates[0]);
+
+    // Check for consecutive days going backwards
+    for (let i = 1; i < completedDates.length; i++) {
+        // Calculate what yesterday would be from the current date
+        const expectedPrevDate = new Date(currentDate);
+        expectedPrevDate.setDate(expectedPrevDate.getDate() - 1);
+        const expectedPrevKey = getDateKey(expectedPrevDate);
+
+        if (completedDates[i] === expectedPrevKey) {
             streak++;
-            currentDate = prevDate;
+            currentDate = expectedPrevDate;
         } else {
             break;
         }
@@ -75,7 +89,84 @@ export const calculateLevel = (totalXp: number): LevelInfo => {
 };
 
 // Storage operations
+// Calculate streak ending at a specific date
+export const calculateStreakForDate = (completions: Record<string, number>, dailyTarget: number, endDate: Date): number => {
+    if (!completions) return 0;
+
+    // Create a temporary date object to traverse backwards
+    let currentDate = new Date(endDate);
+    let streak = 0;
+
+    // Check backwards for 365 days max to prevent infinite loops (though unlikely)
+    for (let i = 0; i < 365; i++) {
+        const dateKey = getDateKey(currentDate);
+        if ((completions[dateKey] || 0) >= dailyTarget) {
+            streak++;
+            currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+    return streak;
+};
+
+// Calculate total XP for a habit based on its history
+// This ensures that XP is always consistent with the current state of streaks and completions
+// It fixes "phantom XP" bugs where adding/removing completions in the past would desync the total XP
+export const calculateHabitTotalXp = (habit: Habit): number => {
+    let xp = 0;
+    const dailyTarget = habit.dailyTarget || 1;
+    // Get all completed dates
+    const completedDates = Object.keys(habit.completions)
+        .filter(k => habit.completions[k] >= dailyTarget)
+        .sort(); // YYYY-MM-DD sorts alphabetically correctly
+
+    if (completedDates.length === 0) return 0;
+
+    let currentStreak = 0;
+    let prevDate: Date | null = null;
+
+    for (const dateKey of completedDates) {
+        // Parse date
+        const [y, m, d] = dateKey.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+
+        // Check if consecutive
+        let isConsecutive = false;
+        if (prevDate) {
+            const expected = new Date(prevDate);
+            expected.setDate(expected.getDate() + 1);
+            // Compare timestamps
+            if (expected.getTime() === date.getTime()) {
+                isConsecutive = true;
+            }
+        } else {
+            // First date
+            isConsecutive = true; // Start of streak
+        }
+
+        if (isConsecutive && prevDate) {
+            currentStreak++;
+        } else if (!prevDate) {
+            currentStreak = 1;
+        } else {
+            // Gap found, reset streak
+            currentStreak = 1;
+        }
+
+        xp += 25; // Base XP
+        if (currentStreak > 1) {
+            xp += Math.min(currentStreak * 5, 50);
+        }
+
+        prevDate = date;
+    }
+    return xp;
+};
+
+// Storage operations
 export const storage = {
+    // ... (rest of storage object up to toggleHabitCompletion) ...
     // Initialize default habits for first-time users
     async initializeDefaultHabits(): Promise<boolean> {
         try {
@@ -180,12 +271,9 @@ export const storage = {
         if (index === -1) return null;
 
         const habit = habits[index];
+        const oldXp = calculateHabitTotalXp(habit);
+
         const targetDateKey = dateKey || getTodayKey();
-
-        // Normalize createdAt to start of day for comparison
-        const createdAtDate = new Date(habit.createdAt);
-        createdAtDate.setHours(0, 0, 0, 0);
-
         const completions = { ...habit.completions };
         const explicitFailures = { ...(habit.explicitFailures || {}) };
         const dailyTarget = habit.dailyTarget || 1;
@@ -193,41 +281,36 @@ export const storage = {
         const currentCount = completions[targetDateKey] || 0;
         const isExplicitlyFailed = explicitFailures[targetDateKey] || false;
         const isCompleted = currentCount >= dailyTarget;
-        let xpGained = 0;
 
         // Three-state cycle: empty → completed → explicitly failed → empty
         if (!isCompleted && !isExplicitlyFailed) {
             // State: empty → completed
             completions[targetDateKey] = dailyTarget;
             delete explicitFailures[targetDateKey];
-            xpGained = 25;
         } else if (isCompleted && !isExplicitlyFailed) {
-            // State: completed → explicitly failed (mark as 'x')
+            // State: completed → explicitly failed
             completions[targetDateKey] = 0;
             explicitFailures[targetDateKey] = true;
-            xpGained = -25;
         } else {
-            // State: explicitly failed → empty (reset to default)
+            // State: explicitly failed → empty
             completions[targetDateKey] = 0;
             delete explicitFailures[targetDateKey];
-            // No XP change since we're going from failed to empty
         }
 
         const streak = calculateStreak(completions, dailyTarget);
 
-        // Bonus XP for streaks
-        if (xpGained > 0 && streak > 1) {
-            xpGained += Math.min(streak * 5, 50);
-        }
-
-        habits[index] = {
+        const updatedHabit = {
             ...habit,
             completions,
             explicitFailures,
             streak,
         };
 
+        habits[index] = updatedHabit;
         await this.saveHabits(habits);
+
+        const newXp = calculateHabitTotalXp(updatedHabit);
+        const xpGained = newXp - oldXp;
 
         let leveledUp = false;
         let newLevel: number | undefined;
@@ -239,7 +322,7 @@ export const storage = {
         }
 
         return {
-            habit: habits[index],
+            habit: updatedHabit,
             xpGained,
             leveledUp,
             newLevel,
@@ -252,41 +335,39 @@ export const storage = {
         if (index === -1) return null;
 
         const habit = habits[index];
+        const oldXp = calculateHabitTotalXp(habit);
+
         const targetDateKey = dateKey || getTodayKey();
-
-        // Normalize createdAt to start of day for comparison
-        const createdAtDate = new Date(habit.createdAt);
-        createdAtDate.setHours(0, 0, 0, 0);
-
         const dailyTarget = habit.dailyTarget || 1;
         const completions = { ...habit.completions };
 
         const oldProgress = completions[targetDateKey] || 0;
-        // Cap at daily target - can't exceed the goal
         const newProgress = Math.min(dailyTarget, Math.max(0, oldProgress + amount));
 
-        // Don't update if already at max and trying to add more
         if (oldProgress >= dailyTarget && amount > 0) return null;
 
         completions[targetDateKey] = newProgress;
 
-        let xpGained = 0;
-        // Gaining XP when completing for the first time or reaching target
-        if (oldProgress < dailyTarget && newProgress >= dailyTarget) {
-            xpGained = 25;
-        } else if (oldProgress >= dailyTarget && newProgress < dailyTarget) {
-            xpGained = -25;
+        // Automatically clear explicit failure if progress is made
+        const explicitFailures = { ...(habit.explicitFailures || {}) };
+        if (newProgress > 0 && explicitFailures[targetDateKey]) {
+            delete explicitFailures[targetDateKey];
         }
 
         const streak = calculateStreak(completions, dailyTarget);
 
-        habits[index] = {
+        const updatedHabit = {
             ...habit,
             completions,
+            explicitFailures,
             streak,
         };
 
+        habits[index] = updatedHabit;
         await this.saveHabits(habits);
+
+        const newXp = calculateHabitTotalXp(updatedHabit);
+        const xpGained = newXp - oldXp;
 
         let leveledUp = false;
         let newLevel: number | undefined;
@@ -298,13 +379,12 @@ export const storage = {
         }
 
         return {
-            habit: habits[index],
+            habit: updatedHabit,
             xpGained,
             leveledUp,
             newLevel,
         };
     },
-
 
     // User stats
     async getUserStats(): Promise<UserStats> {
@@ -381,8 +461,8 @@ export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => 
         // Missed if: before today, after created, not completed, and NOT explicitly marked as failed
         const isMissed = !isCompleted && !isToday && !isExplicitlyFailed && date < today && date >= createdDate;
 
-        // Inactive if: before createdDate
-        const isInactive = date < createdDate;
+        // Inactive if: before createdDate AND no progress (handles backfilled data)
+        const isInactive = date < createdDate && progress === 0;
 
         gridData.push({
             key: dateKey,

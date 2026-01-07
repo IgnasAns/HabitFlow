@@ -41,6 +41,7 @@ export const colors = {
     glass: 'rgba(255, 255, 255, 0.03)',
     glassBorder: 'rgba(255, 255, 255, 0.08)',
     glassHighlight: 'rgba(255, 255, 255, 0.12)',
+    emptyCell: 'rgba(255, 255, 255, 0.08)',
 
     // Text
     textPrimary: '#FFFFFF',
@@ -58,7 +59,7 @@ export const colors = {
         ['#84CC16', '#4D7C0F'], // Lime
         ['#0EA5E9', '#0284C7'], // Sky
     ] as const,
-} as const;
+};
 
 export const spacing = {
     xs: 4,

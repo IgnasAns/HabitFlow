@@ -8,7 +8,7 @@ import Animated, {
     runOnJS,
     Easing,
 } from 'react-native-reanimated';
-import { colors } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -115,6 +115,7 @@ export default function ConfettiOverlay({
 }: ConfettiOverlayProps) {
     const [particles, setParticles] = useState<Particle[]>([]);
     const [completedCount, setCompletedCount] = useState(0);
+    const { colors } = useTheme();
 
     const confettiColors = [
         colors.primaryStart,

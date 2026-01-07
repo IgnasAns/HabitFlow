@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View,
     Text,
@@ -13,9 +13,12 @@ import Animated, {
     FadeInDown,
     FadeOut,
     FadeOutDown,
-    Layout
+    Layout,
+    ZoomIn,
+    ZoomOut
 } from 'react-native-reanimated';
-import { colors, spacing, borderRadius, typography, shadows } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography, shadows } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ConfirmationModalProps {
@@ -39,7 +42,10 @@ export default function ConfirmationModal({
     onCancel,
     type = 'info'
 }: ConfirmationModalProps) {
-    const confirmColors = type === 'danger' ? [...colors.danger] : [...colors.primary];
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
+
+    const confirmColors = type === 'danger' ? [colors.dangerStart, colors.dangerEnd] : [colors.primaryStart, colors.primaryEnd];
     const iconName = type === 'danger' ? 'alert-circle' : 'information-circle';
     const iconColor = type === 'danger' ? colors.dangerStart : colors.primaryStart;
 
@@ -60,8 +66,8 @@ export default function ConfirmationModal({
                 </Animated.View>
 
                 <Animated.View
-                    entering={FadeIn.duration(150)}
-                    exiting={FadeOut.duration(100)}
+                    entering={FadeIn.duration(200)}
+                    exiting={FadeOut.duration(150)}
                     style={styles.modalContainer}
                 >
                     <View style={styles.content}>
@@ -107,7 +113,8 @@ export default function ConfirmationModal({
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: 'center',
@@ -124,7 +131,7 @@ const styles = StyleSheet.create({
         borderRadius: 32,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: colors.glassBorder,
         ...shadows.card,
     },
     content: {

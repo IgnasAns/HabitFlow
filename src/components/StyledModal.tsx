@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { colors, spacing, borderRadius, typography } from '../theme';
-import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, borderRadius, typography } from '../theme';
+import { triggerSelectionHaptic } from '../utils/feedback';
 
 interface StyledModalProps {
     visible: boolean;
@@ -22,8 +23,11 @@ export default function StyledModal({
     onClose,
     buttonText = 'Got it'
 }: StyledModalProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => getStyles(colors), [colors]);
+
     const handleClose = () => {
-        Haptics.selectionAsync();
+        triggerSelectionHaptic();
         onClose();
     };
 
@@ -36,15 +40,15 @@ export default function StyledModal({
         >
             <Pressable style={styles.overlay} onPress={handleClose}>
                 <Animated.View
-                    entering={FadeIn.duration(150)}
-                    exiting={FadeOut.duration(100)}
+                    entering={FadeIn.duration(200)}
+                    exiting={FadeOut.duration(150)}
                     style={styles.container}
                 >
                     <Pressable onPress={(e) => e.stopPropagation()}>
                         <View style={styles.content}>
                             {/* Header with gradient accent */}
                             <LinearGradient
-                                colors={[...colors.primary]}
+                                colors={[colors.primaryStart, colors.primaryEnd]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={styles.headerAccent}
@@ -67,7 +71,7 @@ export default function StyledModal({
                                 onPress={handleClose}
                             >
                                 <LinearGradient
-                                    colors={[...colors.primary]}
+                                    colors={[colors.primaryStart, colors.primaryEnd]}
                                     style={styles.buttonGradient}
                                 >
                                     <Text style={styles.buttonText}>{buttonText}</Text>
@@ -81,7 +85,8 @@ export default function StyledModal({
     );
 }
 
-const styles = StyleSheet.create({
+
+const getStyles = (colors: any) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
@@ -99,8 +104,17 @@ const styles = StyleSheet.create({
         padding: spacing.xl,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: colors.glassBorder,
         overflow: 'hidden',
+        // Shadow for depth
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 10,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 10,
     },
     headerAccent: {
         position: 'absolute',
