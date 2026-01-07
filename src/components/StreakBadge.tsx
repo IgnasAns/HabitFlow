@@ -6,7 +6,6 @@ import Animated, {
     withSequence,
     useSharedValue,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing } from '../theme';
 

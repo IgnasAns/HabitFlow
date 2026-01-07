@@ -2,7 +2,6 @@ import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import Animated, {
     useAnimatedStyle,
-    withSpring,
     withSequence,
     withTiming,
     useSharedValue,
@@ -116,7 +115,7 @@ const LevelProgress = React.memo(({
 
             <StyledModal
                 visible={modalVisible}
-                title={`Level ${level}`}
+                title={`Level ${level} `}
                 message={`You have earned ${totalXp} XP total!\n\nProgress to Level ${level + 1}: ${currentXp}/${xpNeeded} XP\n\nComplete habits daily to earn more XP. Streaks give bonus XP!`}
                 emoji="⭐"
                 onClose={() => setModalVisible(false)}

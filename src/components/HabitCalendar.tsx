@@ -6,7 +6,7 @@ import { Habit } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
 import { getDateKey } from '../utils/storage';
-import * as Haptics from 'expo-haptics';
+import { triggerSelectionHaptic, triggerNotificationHaptic, triggerHaptic, FeedbackType, ImpactStyle } from '../utils/feedback';
 
 interface HabitCalendarProps {
     habit: Habit;
@@ -69,10 +69,10 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
                         ]}
                         onPress={() => {
                             if (isFuture) {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                                triggerNotificationHaptic(FeedbackType.Error);
                                 return;
                             }
-                            Haptics.selectionAsync();
+                            triggerSelectionHaptic();
                             onToggle(dateKey);
                         }}
                         disabled={isFuture}
@@ -107,7 +107,7 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
         const newDate = new Date(viewDate);
         newDate.setMonth(newDate.getMonth() + delta);
         setViewDate(newDate);
-        Haptics.selectionAsync();
+        triggerSelectionHaptic();
     };
 
     return (

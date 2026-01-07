@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography } from '../theme';
 import { triggerSelectionHaptic } from '../utils/feedback';

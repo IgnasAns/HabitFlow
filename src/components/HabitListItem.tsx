@@ -13,7 +13,7 @@ import Animated, {
     withSequence,
     withTiming,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { triggerHaptic, ImpactStyle } from '../utils/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
 import { useTheme } from '../context/ThemeContext';
@@ -77,7 +77,7 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
         if (isProcessing) return;
         setIsProcessing(true);
 
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        triggerHaptic(ImpactStyle.Light);
         checkScale.value = withSequence(
             withTiming(1.2, { duration: 80 }),
             withTiming(1, { duration: 120 })
