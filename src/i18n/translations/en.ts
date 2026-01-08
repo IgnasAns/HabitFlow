@@ -147,6 +147,8 @@ export const en = {
         appExperience: 'APP EXPERIENCE',
         smartReminders: 'Smart Reminders',
         smartRemindersDesc: 'Get reminded when you forget',
+        reminderTime: 'Reminder Time',
+        reminderTimeDesc: 'When to receive daily reminder',
         testNotification: 'Test Notification (5s)',
         notificationScheduled: 'Notification scheduled for 5 seconds from now.\n\nPlease close the app (go to home screen) to see it.',
         testSent: 'Test Sent',

@@ -23,7 +23,8 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ianskaitis.HabitFlow",
-      "versionCode": 9
+      "versionCode": 9,
+      "allowBackup": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

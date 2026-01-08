@@ -147,6 +147,8 @@ export const de = {
         appExperience: 'APP-ERFAHRUNG',
         smartReminders: 'Intelligente Erinnerungen',
         smartRemindersDesc: 'Lass dich erinnern, wenn du etwas vergisst',
+        reminderTime: 'Erinnerungszeit',
+        reminderTimeDesc: 'Wann du die tägliche Erinnerung erhältst',
         testNotification: 'Test-Benachrichtigung (5s)',
         notificationScheduled: 'Benachrichtigung für in 5 Sekunden geplant.\n\nBitte schließe die App, um sie zu sehen.',
         testSent: 'Test gesendet',

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState, useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -24,13 +24,14 @@ import { Habit } from '../types';
 interface HabitListItemProps {
     habit: Habit;
     onToggle: (id: string, dateKey?: string) => void;
+    onIncrement?: (id: string, amount: number, dateKey?: string) => void;
     onPress: (id: string) => void;
     drag?: () => void;
     isActive?: boolean;
     daysToShow?: number;
 }
 
-const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 7 }: HabitListItemProps) => {
+const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, daysToShow = 7 }: HabitListItemProps) => {
     const { t } = useI18n();
     const { colors } = useTheme();
     const styles = useMemo(() => getStyles(colors), [colors]);
@@ -43,7 +44,25 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
     const habitThemeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
 
     const checkScale = useSharedValue(1);
-    const [isProcessing, setIsProcessing] = useState(false);
+
+    // Smart increment options based on REMAINING amount (not target)
+    // Excludes options that would complete the habit (check button does that)
+    const smartIncrements = useMemo(() => {
+        const target = habit.dailyTarget;
+        const remaining = target - progressToday;
+        if (target <= 1 || remaining <= 0) return [];
+
+        // Build options: must be less than remaining (not equal, since check button completes)
+        const allOptions = [1, 5, 10, 25, 50, 100];
+        const validOptions = allOptions.filter(v => v < remaining);
+
+        if (validOptions.length === 0) return [];
+        if (validOptions.length <= 2) return validOptions;
+
+        // Pick +1 and the largest useful option
+        const largest = validOptions[validOptions.length - 1];
+        return [1, largest];
+    }, [habit.dailyTarget, progressToday]);
 
     const isMonthly = daysToShow > 7;
 
@@ -75,22 +94,28 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
         return parseDateKey(gridData[0].key).getDay();
     }, [gridData, isMonthly]);
 
-    const handleAction = useCallback(async () => {
-        if (isProcessing) return;
-        setIsProcessing(true);
-
+    const handleAction = useCallback(() => {
+        // Immediate haptic feedback
         triggerHaptic(ImpactStyle.Light);
         checkScale.value = withSequence(
             withTiming(1.2, { duration: 80 }),
             withTiming(1, { duration: 120 })
         );
+        // Trigger action immediately (optimistic update in context)
+        onToggle(habit.id, todayKey);
+    }, [onToggle, habit.id, todayKey]);
 
-        try {
-            await Promise.resolve(onToggle(habit.id, todayKey));
-        } finally {
-            setTimeout(() => setIsProcessing(false), 200);
-        }
-    }, [onToggle, habit.id, todayKey, isProcessing]);
+    // Handle increment for multi-unit habits
+    const handleIncrement = useCallback((amount: number = 1) => {
+        if (!onIncrement) return;
+        triggerHaptic(ImpactStyle.Light);
+        checkScale.value = withSequence(
+            withTiming(1.15, { duration: 60 }),
+            withTiming(1, { duration: 100 })
+        );
+        // Trigger action immediately
+        onIncrement(habit.id, amount, todayKey);
+    }, [onIncrement, habit.id, todayKey]);
 
     const checkStyle = useAnimatedStyle(() => ({
         transform: [{ scale: checkScale.value }],
@@ -121,33 +146,70 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
                     </Text>
                 </View>
 
-                {/* Check Button */}
-                <Animated.View style={checkStyle}>
-                    <Pressable
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                        style={[
-                            styles.checkBtn,
-                            isCompletedToday
-                                ? { backgroundColor: habitThemeColor, borderColor: habitThemeColor }
-                                : isExplicitlyFailedToday
-                                    ? { backgroundColor: colors.dangerStart, borderColor: colors.dangerStart }
-                                    : { borderColor: habitThemeColor + '50', backgroundColor: 'transparent' }
-                        ]}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            handleAction();
-                        }}
-                        delayLongPress={300}
-                    >
-                        {isCompletedToday ? (
-                            <Text style={styles.checkMark}>✓</Text>
-                        ) : isExplicitlyFailedToday ? (
-                            <Text style={styles.checkMark}>×</Text>
-                        ) : (
-                            <Text style={[styles.plusIcon, { color: habitThemeColor }]}>+</Text>
-                        )}
-                    </Pressable>
-                </Animated.View>
+                {/* Buttons: Increment (if multi-unit) + Check */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {/* Smart Increment Buttons for multi-unit habits */}
+                    {smartIncrements.length > 0 && onIncrement && !isCompletedToday && (
+                        <>
+                            {smartIncrements.map((amount) => (
+                                <Pressable
+                                    key={amount}
+                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                    style={({ pressed }) => [
+                                        {
+                                            minWidth: 32,
+                                            height: 30,
+                                            paddingHorizontal: 6,
+                                            borderRadius: 8,
+                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            borderWidth: 1,
+                                            borderColor: habitThemeColor + '40',
+                                        },
+                                        pressed && { transform: [{ scale: 0.95 }], opacity: 0.8 }
+                                    ]}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        handleIncrement(amount);
+                                    }}
+                                >
+                                    <Text style={{ color: habitThemeColor, fontSize: 13, fontWeight: '700' }}>+{amount}</Text>
+                                </Pressable>
+                            ))}
+                        </>
+                    )}
+
+                    {/* Check/Progress Button */}
+                    <Animated.View style={checkStyle}>
+                        <Pressable
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                            style={[
+                                styles.checkBtn,
+                                isCompletedToday
+                                    ? { backgroundColor: habitThemeColor, borderColor: habitThemeColor }
+                                    : isExplicitlyFailedToday
+                                        ? { backgroundColor: colors.dangerStart, borderColor: colors.dangerStart }
+                                        : { borderColor: habitThemeColor + '50', backgroundColor: 'transparent' }
+                            ]}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                handleAction();
+                            }}
+                            delayLongPress={300}
+                        >
+                            {isCompletedToday ? (
+                                <Text style={styles.checkMark}>✓</Text>
+                            ) : isExplicitlyFailedToday ? (
+                                <Text style={styles.checkMark}>×</Text>
+                            ) : habit.dailyTarget > 1 && progressToday > 0 ? (
+                                <Text style={{ color: habitThemeColor, fontSize: 13, fontWeight: '800' }}>{progressToday}</Text>
+                            ) : (
+                                <Text style={[styles.plusIcon, { color: habitThemeColor }]}>+</Text>
+                            )}
+                        </Pressable>
+                    </Animated.View>
+                </View>
             </View>
 
             {/* Grid Container */}
@@ -174,7 +236,7 @@ const HabitListItem = ({ habit, onToggle, onPress, drag, isActive, daysToShow = 
                         if (!day && !isMonthly) {
                             const label = weekDaysShort[index];
                             return (
-                                <View style={{ alignItems: 'center', gap: 2 }}>
+                                <View key={`empty-${index}`} style={{ alignItems: 'center', gap: 2 }}>
                                     <View style={[styles.miniGridCell, { width: 26, height: 26, borderRadius: 6, backgroundColor: colors.emptyCell }]} />
                                     <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '500' }}>{label}</Text>
                                 </View>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
 import { useTheme } from '../context/ThemeContext';
@@ -30,10 +30,20 @@ export default function WidgetHub({ navigation }: any) {
     const { colors, toggleTheme, theme, colorMode, toggleColorMode } = useTheme();
     const todayKey = getTodayKey();
     const insets = useSafeAreaInsets();
-    // Use local state for options
-    const [smartReminders, setSmartReminders] = useState(false);
+    // Use local state for options - Reminders ON by default at 8PM
+    const [smartReminders, setSmartReminders] = useState(true);
+    const [reminderHour, setReminderHour] = useState(20); // Default 8 PM
+    const [reminderMinute, setReminderMinute] = useState(0);
     const [hapticsEnabled, setHapticsEnabled] = useState(true);
     const [soundEnabled, setSoundEnabled] = useState(true);
+    const [showTimePicker, setShowTimePicker] = useState(false);
+
+    // Local state for time inputs to prevent cursor jumping
+    const [localHour, setLocalHour] = useState('20');
+    const [localMinute, setLocalMinute] = useState('00');
+    const [customMode, setCustomMode] = useState(false);
+
+
 
     // Load settings
     useEffect(() => {
@@ -43,9 +53,10 @@ export default function WidgetHub({ navigation }: any) {
                 if (storedSettings) {
                     const parsed = JSON.parse(storedSettings);
                     setSmartReminders(parsed.smartReminders ?? false);
+                    setReminderHour(parsed.reminderHour ?? 20);
+                    setReminderMinute(parsed.reminderMinute ?? 0);
                     setHapticsEnabled(parsed.hapticsEnabled ?? true);
                     setSoundEnabled(parsed.soundEnabled ?? true);
-                    // Theme and colorMode handled by ThemeProvider
                 }
             } catch (e) {
                 // error loading
@@ -54,9 +65,12 @@ export default function WidgetHub({ navigation }: any) {
         loadSettings();
     }, []);
 
+    // Sync local state when picker opens - REMOVED to prevent race conditions
+    // Syncing is now done imperatively in the toggle handler
+
     const saveSettings = async (updates: any) => {
         try {
-            const currentMatrix = { smartReminders, hapticsEnabled, soundEnabled, darkMode: theme === 'dark', colorMode };
+            const currentMatrix = { smartReminders, reminderHour, reminderMinute, hapticsEnabled, soundEnabled, darkMode: theme === 'dark', colorMode };
             const newSettings = { ...currentMatrix, ...updates };
             await AsyncStorage.setItem('app_settings', JSON.stringify(newSettings));
         } catch (e) {
@@ -74,8 +88,9 @@ export default function WidgetHub({ navigation }: any) {
                     // Enabling
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
-                            scheduleDailyReminder();
-                            showInfo(t.settings.remindersSet, t.settings.remindersMessage, "✅");
+                            scheduleDailyReminder(reminderHour, reminderMinute);
+                            const timeStr = `${reminderHour.toString().padStart(2, '0')}:${reminderMinute.toString().padStart(2, '0')}`;
+                            showInfo(t.settings.remindersSet, `You'll be reminded daily at ${timeStr} to check your habits.`, "✅");
                         } else {
                             // Permission denied or error
                             setSmartReminders(false); // Revert switch if failed
@@ -113,6 +128,22 @@ export default function WidgetHub({ navigation }: any) {
                 break;
         }
     };
+
+    // Update reminder time
+    const updateReminderTime = useCallback((hour: number, minute: number) => {
+        setReminderHour(hour);
+        setReminderMinute(minute);
+        // Do NOT sync local state here to avoid race conditions while typing
+        saveSettings({ reminderHour: hour, reminderMinute: minute });
+
+        // Reschedule notification with new time if reminders are enabled
+        if (smartReminders) {
+            scheduleDailyReminder(hour, minute);
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            showInfo(t.settings.remindersSet, `Reminder updated to ${timeStr}`, "🔔");
+        }
+        setShowTimePicker(false);
+    }, [smartReminders, t]);
 
     const handleImport = async () => {
         try {
@@ -305,17 +336,225 @@ export default function WidgetHub({ navigation }: any) {
                 </View>
 
                 {smartReminders && (
-                    <TouchableOpacity
-                        style={[styles.exportButton, { marginBottom: spacing.md, paddingVertical: 8, borderColor: colors.glassBorder }]}
-                        onPress={async () => {
-                            triggerSelectionHaptic();
-                            await registerForPushNotificationsAsync();
-                            await scheduleTestNotification();
-                            setShowTestModal(true);
-                        }}
-                    >
-                        <Text style={[styles.exportButtonText, { fontSize: 12, color: colors.textSecondary }]}>{t.settings.testNotification}</Text>
-                    </TouchableOpacity>
+                    <View style={{ marginBottom: spacing.md }}>
+                        {/* Current Time Display */}
+                        <Pressable
+                            style={[styles.settingRow, { backgroundColor: colors.bgCard, borderRadius: borderRadius.md, padding: spacing.sm, marginBottom: spacing.sm }]}
+                            onPress={() => {
+                                triggerSelectionHaptic();
+                                if (!showTimePicker) {
+                                    // Opening: Sync local state immediately and exclusively here
+                                    setLocalHour(reminderHour.toString().padStart(2, '0'));
+                                    setLocalMinute(reminderMinute.toString().padStart(2, '0'));
+                                }
+                                setShowTimePicker(!showTimePicker);
+                            }}
+                        >
+                            <View style={styles.settingInfo}>
+                                <Text style={styles.settingLabel}><Text style={{ fontSize: 18 }}>⏰</Text>  {t.settings.reminderTime}</Text>
+                                <Text style={styles.settingDesc}>{t.settings.reminderTimeDesc}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ ...typography.bodyBold, color: colors.primaryStart, fontSize: 18 }}>
+                                    {reminderHour.toString().padStart(2, '0')}:{reminderMinute.toString().padStart(2, '0')}
+                                </Text>
+                                <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+                            </View>
+                        </Pressable>
+
+                        {/* Time Picker Options */}
+                        {showTimePicker && (
+                            <View style={{ backgroundColor: colors.bgCard, borderRadius: borderRadius.md, padding: spacing.sm, marginBottom: spacing.sm }}>
+                                <Text style={{ ...typography.small, color: colors.textMuted, marginBottom: spacing.sm }}>QUICK SELECT</Text>
+
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                                    {/* Helper Logic */}
+                                    {(() => {
+                                        const PRESETS = [
+                                            { h: 7, m: 0, label: '7:00 AM' },
+                                            { h: 8, m: 0, label: '8:00 AM' },
+                                            { h: 9, m: 0, label: '9:00 AM' },
+                                            { h: 12, m: 0, label: '12:00 PM' },
+                                            { h: 18, m: 0, label: '6:00 PM' },
+                                            { h: 19, m: 0, label: '7:00 PM' },
+                                            { h: 20, m: 0, label: '8:00 PM' },
+                                            { h: 21, m: 0, label: '9:00 PM' },
+                                        ];
+
+                                        const currentPresetMatch = PRESETS.some(t => t.h === reminderHour && t.m === reminderMinute);
+                                        const showCustomInput = customMode || !currentPresetMatch;
+
+                                        return (
+                                            <>
+                                                {PRESETS.map((time) => {
+                                                    const isSelected = !customMode && reminderHour === time.h && reminderMinute === time.m;
+                                                    return (
+                                                        <Pressable
+                                                            key={`${time.h}:${time.m}`}
+                                                            style={({ pressed }) => [
+                                                                {
+                                                                    paddingVertical: spacing.xs,
+                                                                    paddingHorizontal: spacing.sm,
+                                                                    backgroundColor: isSelected
+                                                                        ? colors.primaryStart
+                                                                        : 'rgba(255,255,255,0.05)',
+                                                                    borderRadius: borderRadius.sm,
+                                                                    borderWidth: 1,
+                                                                    borderColor: isSelected
+                                                                        ? colors.primaryStart
+                                                                        : 'rgba(255,255,255,0.1)',
+                                                                },
+                                                                pressed && { opacity: 0.7 }
+                                                            ]}
+                                                            onPress={() => {
+                                                                triggerHaptic(ImpactStyle.Light);
+                                                                setCustomMode(false);
+                                                                setLocalHour(time.h.toString().padStart(2, '0'));
+                                                                setLocalMinute(time.m.toString().padStart(2, '0'));
+                                                                updateReminderTime(time.h, time.m);
+                                                            }}
+                                                        >
+                                                            <Text style={{
+                                                                ...typography.small,
+                                                                color: isSelected ? '#fff' : colors.textSecondary,
+                                                                fontWeight: isSelected ? '700' : '400'
+                                                            }}>
+                                                                {time.label}
+                                                            </Text>
+                                                        </Pressable>
+                                                    );
+                                                })}
+
+                                                {/* Custom Button */}
+                                                <Pressable
+                                                    style={({ pressed }) => [
+                                                        {
+                                                            paddingVertical: spacing.xs,
+                                                            paddingHorizontal: spacing.sm,
+                                                            backgroundColor: showCustomInput
+                                                                ? colors.primaryStart
+                                                                : 'rgba(255,255,255,0.05)',
+                                                            borderRadius: borderRadius.sm,
+                                                            borderWidth: 1,
+                                                            borderColor: showCustomInput
+                                                                ? colors.primaryStart
+                                                                : 'rgba(255,255,255,0.1)',
+                                                        },
+                                                        pressed && { opacity: 0.7 }
+                                                    ]}
+                                                    onPress={() => {
+                                                        triggerHaptic(ImpactStyle.Light);
+                                                        setCustomMode(true);
+                                                        setLocalHour(reminderHour.toString().padStart(2, '0'));
+                                                        setLocalMinute(reminderMinute.toString().padStart(2, '0'));
+                                                    }}
+                                                >
+                                                    <Text style={{
+                                                        ...typography.small,
+                                                        color: showCustomInput ? '#fff' : colors.textSecondary,
+                                                        fontWeight: showCustomInput ? '700' : '400'
+                                                    }}>
+                                                        CUSTOM
+                                                    </Text>
+                                                </Pressable>
+                                            </>
+                                        );
+                                    })()}
+                                </View>
+
+                                {/* Manual Time Input */}
+                                {(() => {
+                                    const PRESETS = [
+                                        { h: 7, m: 0 }, { h: 8, m: 0 }, { h: 9, m: 0 }, { h: 12, m: 0 },
+                                        { h: 18, m: 0 }, { h: 19, m: 0 }, { h: 20, m: 0 }, { h: 21, m: 0 }
+                                    ];
+                                    const currentPresetMatch = PRESETS.some(t => t.h === reminderHour && t.m === reminderMinute);
+                                    const showCustomInput = customMode || !currentPresetMatch;
+
+                                    if (showCustomInput) {
+                                        return (
+                                            <View style={{ marginTop: spacing.md }}>
+                                                <Text style={{ ...typography.small, color: colors.textMuted, marginBottom: spacing.xs }}>CUSTOM TIME (24H)</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                                                    <TextInput
+                                                        style={{
+                                                            width: 60,
+                                                            height: 44,
+                                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                                            borderRadius: borderRadius.sm,
+                                                            borderWidth: 1,
+                                                            borderColor: 'rgba(255,255,255,0.1)',
+                                                            color: colors.textPrimary,
+                                                            textAlign: 'center',
+                                                            fontSize: 18,
+                                                            fontWeight: '700',
+                                                        }}
+                                                        value={localHour}
+                                                        onChangeText={setLocalHour}
+                                                        keyboardType="number-pad"
+                                                        maxLength={2}
+                                                        placeholder="HH"
+                                                        placeholderTextColor={colors.textMuted}
+                                                    />
+                                                    <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>:</Text>
+                                                    <TextInput
+                                                        style={{
+                                                            width: 60,
+                                                            height: 44,
+                                                            backgroundColor: 'rgba(255,255,255,0.05)',
+                                                            borderRadius: borderRadius.sm,
+                                                            borderWidth: 1,
+                                                            borderColor: 'rgba(255,255,255,0.1)',
+                                                            color: colors.textPrimary,
+                                                            textAlign: 'center',
+                                                            fontSize: 18,
+                                                            fontWeight: '700',
+                                                        }}
+                                                        value={localMinute}
+                                                        onChangeText={setLocalMinute}
+                                                        keyboardType="number-pad"
+                                                        maxLength={2}
+                                                        placeholder="MM"
+                                                        placeholderTextColor={colors.textMuted}
+                                                    />
+                                                    <Pressable
+                                                        style={{
+                                                            paddingVertical: spacing.xs,
+                                                            paddingHorizontal: spacing.md,
+                                                            backgroundColor: colors.primaryStart,
+                                                            borderRadius: borderRadius.sm,
+                                                        }}
+                                                        onPress={() => {
+                                                            triggerHaptic(ImpactStyle.Light);
+                                                            const h = parseInt(localHour, 10) || 0;
+                                                            const m = parseInt(localMinute, 10) || 0;
+                                                            updateReminderTime(Math.min(23, Math.max(0, h)), Math.min(59, Math.max(0, m)));
+                                                        }}
+                                                    >
+                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>SET</Text>
+                                                    </Pressable>
+                                                </View>
+                                            </View>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+                            </View>
+                        )}
+
+                        {/* Test Notification Button */}
+                        <TouchableOpacity
+                            style={[styles.exportButton, { paddingVertical: 8, borderColor: colors.glassBorder }]}
+                            onPress={async () => {
+                                triggerSelectionHaptic();
+                                await registerForPushNotificationsAsync();
+                                await scheduleTestNotification();
+                                setShowTestModal(true);
+                            }}
+                        >
+                            <Text style={[styles.exportButtonText, { fontSize: 12, color: colors.textSecondary }]}>{t.settings.testNotification}</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 <View style={styles.settingRow}>
@@ -423,7 +662,7 @@ export default function WidgetHub({ navigation }: any) {
             </View>
             <View style={{ height: 80 }} />
         </View>
-    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, hapticsEnabled, soundEnabled, theme, colorMode]);
+    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, reminderHour, reminderMinute, showTimePicker, updateReminderTime, hapticsEnabled, soundEnabled, theme, colorMode, customMode, localHour, localMinute]);
 
     return (
         <GestureHandlerRootView style={styles.container}>
@@ -437,6 +676,7 @@ export default function WidgetHub({ navigation }: any) {
                 style={styles.container}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 {/* Header stats section */}
                 {renderHeader()}

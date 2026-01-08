@@ -6,6 +6,7 @@ import {
     Pressable,
     RefreshControl,
     ActivityIndicator,
+    Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -64,15 +65,22 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         });
     }, []);
 
-    // Toggle view mode
+    // Toggle view mode - haptic FIRST for immediate feedback
     const toggleViewMode = useCallback(() => {
+        // Immediate haptic feedback
+        triggerHaptic();
+
         let newMode: ViewMode = 'list';
         if (viewMode === 'list') newMode = 'monthly';
         else if (viewMode === 'monthly') newMode = 'card';
 
+        // Immediate UI update - no animation for instant response
         setViewMode(newMode);
-        AsyncStorage.setItem(VIEW_MODE_KEY, newMode);
-        triggerHaptic();
+
+        // Defer storage to next frame to not block UI
+        requestAnimationFrame(() => {
+            AsyncStorage.setItem(VIEW_MODE_KEY, newMode);
+        });
     }, [viewMode]);
 
     // Stable handlers for HabitCard performance
@@ -116,6 +124,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                     <HabitListItem
                         habit={item}
                         onToggle={handleToggle}
+                        onIncrement={handleIncrement}
                         onPress={handleEdit}
                         drag={drag}
                         isActive={isActive}
@@ -231,11 +240,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <DraggableFlatList
                     containerStyle={{ flex: 1 }}
                     data={habits}
+                    extraData={viewMode}
                     onDragEnd={({ data }) => reorderHabits(data)}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
+                    removeClippedSubviews={Platform.OS === 'android'}
+                    initialNumToRender={5}
+                    maxToRenderPerBatch={3}
+                    updateCellsBatchingPeriod={50}
+                    windowSize={5}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}

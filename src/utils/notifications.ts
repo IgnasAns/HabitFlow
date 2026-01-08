@@ -35,7 +35,7 @@ export async function registerForPushNotificationsAsync() {
     return token || (finalStatus === 'granted' ? 'emulator-token' : undefined);
 }
 
-export async function scheduleDailyReminder() {
+export async function scheduleDailyReminder(hour: number = 20, minute: number = 0) {
     if (Platform.OS === 'web') return;
 
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -57,8 +57,8 @@ export async function scheduleDailyReminder() {
         },
         trigger: {
             type: 'calendar',
-            hour: 20, // 8 PM
-            minute: 0,
+            hour: hour,
+            minute: minute,
             repeats: true,
         } as Notifications.CalendarTriggerInput,
     });

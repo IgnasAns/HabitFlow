@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { storage, calculateLevel, calculateHabitTotalXp } from '../utils/storage';
+import { storage, calculateLevel, calculateHabitTotalXp, getTodayKey, calculateStreak } from '../utils/storage';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
 // Action types
@@ -35,8 +35,8 @@ interface HabitContextType extends HabitState {
     addHabit: (habitData: Omit<Habit, 'id' | 'createdAt' | 'completions' | 'streak' | 'explicitFailures'>) => Promise<Habit>;
     updateHabit: (id: string, updates: Partial<Habit>) => Promise<Habit | null>;
     deleteHabit: (id: string) => Promise<void>;
-    toggleHabitCompletion: (id: string, dateKey?: string) => Promise<ToggleResult | null>;
-    incrementHabitProgress: (id: string, amount: number, dateKey?: string) => Promise<void>;
+    toggleHabitCompletion: (id: string, dateKey?: string) => ToggleResult | null;
+    incrementHabitProgress: (id: string, amount: number, dateKey?: string) => void;
     moveHabit: (fromIndex: number, toIndex: number) => Promise<void>;
     reorderHabits: (habits: Habit[]) => Promise<void>;
     clearLastAction: () => void;
@@ -164,6 +164,19 @@ export function HabitProvider({ children }: HabitProviderProps) {
         dispatch({ type: 'SET_USER_STATS', payload: userStats });
     }, []);
 
+    // Debounced Auto-Save: Persist state changes to storage
+    // This prevents UI lag and race conditions during rapid tapping
+    useEffect(() => {
+        if (state.isLoading) return;
+
+        const timer = setTimeout(() => {
+            storage.saveHabits(state.habits).catch(console.error);
+            storage.saveUserStats(state.userStats).catch(console.error);
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [state.habits, state.userStats]);
+
     const addHabit = useCallback(async (habitData: Omit<Habit, 'id' | 'createdAt' | 'completions' | 'streak' | 'explicitFailures'>): Promise<Habit> => {
         const newHabit = await storage.addHabit(habitData);
         dispatch({ type: 'ADD_HABIT', payload: newHabit });
@@ -183,20 +196,117 @@ export function HabitProvider({ children }: HabitProviderProps) {
         dispatch({ type: 'DELETE_HABIT', payload: id });
     }, []);
 
-    const toggleHabitCompletion = useCallback(async (id: string, dateKey?: string): Promise<ToggleResult | null> => {
-        const result = await storage.toggleHabitCompletion(id, dateKey);
-        if (result) {
-            dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
-        }
-        return result;
-    }, []);
+    const toggleHabitCompletion = useCallback((id: string, dateKey?: string): ToggleResult | null => {
+        // Find the habit in current state for optimistic update
+        const habit = state.habits.find(h => h.id === id);
+        if (!habit) return null;
 
-    const incrementHabitProgress = useCallback(async (id: string, amount: number, dateKey?: string): Promise<void> => {
-        const result = await storage.incrementHabitProgress(id, amount, dateKey);
-        if (result) {
-            dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+        const targetDateKey = dateKey || getTodayKey();
+        const completions = { ...habit.completions };
+        const explicitFailures = { ...(habit.explicitFailures || {}) };
+        const dailyTarget = habit.dailyTarget || 1;
+
+        const currentCount = completions[targetDateKey] || 0;
+        const isExplicitlyFailed = explicitFailures[targetDateKey] || false;
+        const isCompleted = currentCount >= dailyTarget;
+
+        // Three-state cycle: empty → completed → explicitly failed → empty
+        if (!isCompleted && !isExplicitlyFailed) {
+            completions[targetDateKey] = dailyTarget;
+            delete explicitFailures[targetDateKey];
+        } else if (isCompleted && !isExplicitlyFailed) {
+            completions[targetDateKey] = 0;
+            explicitFailures[targetDateKey] = true;
+        } else {
+            completions[targetDateKey] = 0;
+            delete explicitFailures[targetDateKey];
         }
-    }, []);
+
+        const streak = calculateStreak(completions, dailyTarget);
+        const oldXp = calculateHabitTotalXp(habit);
+
+        const updatedHabit = {
+            ...habit,
+            completions,
+            explicitFailures,
+            streak,
+        };
+
+        const newXp = calculateHabitTotalXp(updatedHabit);
+        const xpGained = newXp - oldXp;
+
+        const currentLevel = calculateLevel(state.userStats.totalXp).level;
+        const newTotalXp = Math.max(0, state.userStats.totalXp + xpGained);
+        const newLevel = calculateLevel(newTotalXp).level;
+        const leveledUp = newLevel > currentLevel;
+
+        const result: ToggleResult = {
+            habit: updatedHabit,
+            xpGained,
+            leveledUp,
+            newLevel: leveledUp ? newLevel : undefined,
+        };
+
+        // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback
+        dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+
+        // Persist via auto-save effect
+        // storage.toggleHabitCompletion(id, dateKey).catch(console.error);
+
+        return result;
+    }, [state.habits, state.userStats.totalXp]);
+
+    const incrementHabitProgress = useCallback((id: string, amount: number, dateKey?: string): void => {
+        // Find the habit in current state for optimistic update
+        const habit = state.habits.find(h => h.id === id);
+        if (!habit) return;
+
+        const targetDateKey = dateKey || getTodayKey();
+        const dailyTarget = habit.dailyTarget || 1;
+        const completions = { ...habit.completions };
+
+        const oldProgress = completions[targetDateKey] || 0;
+        if (oldProgress >= dailyTarget && amount > 0) return;
+
+        const newProgress = Math.min(dailyTarget, Math.max(0, oldProgress + amount));
+        completions[targetDateKey] = newProgress;
+
+        const explicitFailures = { ...(habit.explicitFailures || {}) };
+        if (newProgress > 0 && explicitFailures[targetDateKey]) {
+            delete explicitFailures[targetDateKey];
+        }
+
+        const streak = calculateStreak(completions, dailyTarget);
+        const oldXp = calculateHabitTotalXp(habit);
+
+        const updatedHabit = {
+            ...habit,
+            completions,
+            explicitFailures,
+            streak,
+        };
+
+        const newXp = calculateHabitTotalXp(updatedHabit);
+        const xpGained = newXp - oldXp;
+
+        const currentLevel = calculateLevel(state.userStats.totalXp).level;
+        const newTotalXp = Math.max(0, state.userStats.totalXp + xpGained);
+        const newLevel = calculateLevel(newTotalXp).level;
+        const leveledUp = newLevel > currentLevel;
+
+        const result: ToggleResult = {
+            habit: updatedHabit,
+            xpGained,
+            leveledUp,
+            newLevel: leveledUp ? newLevel : undefined,
+        };
+
+        // OPTIMISTIC UPDATE: Dispatch immediately
+        dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+
+        // Persist via auto-save (debounced)
+        // storage.incrementHabitProgress(id, amount, dateKey).catch(console.error);
+    }, [state.habits, state.userStats.totalXp]);
 
     const moveHabit = useCallback(async (fromIndex: number, toIndex: number): Promise<void> => {
         if (fromIndex < 0 || fromIndex >= state.habits.length || toIndex < 0 || toIndex >= state.habits.length) {

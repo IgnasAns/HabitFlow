@@ -147,6 +147,8 @@ export const fr = {
         appExperience: 'EXPÉRIENCE DE L\'APPLICATION',
         smartReminders: 'Rappels intelligents',
         smartRemindersDesc: 'Soyez rappelé quand vous oubliez',
+        reminderTime: 'Heure du rappel',
+        reminderTimeDesc: 'Quand recevoir le rappel quotidien',
         testNotification: 'Notification de test (5s)',
         notificationScheduled: 'Notification prévue dans 5 secondes.\n\nVeuillez fermer l\'application pour la voir.',
         testSent: 'Test envoyé',

@@ -26,7 +26,7 @@ import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, typography, habitIcons } from '../theme';
 import StreakBadge from '../components/StreakBadge';
 import ConfirmationModal from '../components/ConfirmationModal';
-import HabitCircleCalendar from '../components/HabitCircleCalendar';
+import HabitCalendar from '../components/HabitCalendar';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 
@@ -205,12 +205,27 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                     </View>
                 </View>
 
-                {/* Circle Calendar */}
+                {/* Monthly Calendar */}
                 <View style={{ marginBottom: spacing.lg }}>
-                    <HabitCircleCalendar
-                        completions={habit.completions}
-                        dailyTarget={habit.dailyTarget}
-                        gradientColors={colors.habitColors[selectedColor] || colors.primary}
+                    <HabitCalendar
+                        habit={{
+                            ...habit,
+                            colorIndex: selectedColor,
+                            completions: completions,
+                        }}
+                        onToggle={(dateKey) => {
+                            const current = completions[dateKey] || 0;
+                            const newCompletions = { ...completions };
+                            if (current >= habit.dailyTarget) {
+                                // Toggle off - remove completion
+                                delete newCompletions[dateKey];
+                            } else {
+                                // Toggle on - complete it
+                                newCompletions[dateKey] = habit.dailyTarget;
+                            }
+                            setCompletions(newCompletions);
+                            triggerSelectionHaptic();
+                        }}
                     />
                 </View>
 
@@ -332,6 +347,25 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                                 />
                             </ChoiceButton>
                         ))}
+                    </View>
+                </Animated.View>
+
+                {/* Daily Target */}
+                <Animated.View
+                    entering={FadeInDown.delay(550)}
+                    style={styles.section}
+                >
+                    <Text style={styles.sectionTitle}>{t.habit.dailyTarget}</Text>
+                    <View style={styles.inputContainer}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="1"
+                            placeholderTextColor={colors.textMuted}
+                            value={dailyTarget}
+                            onChangeText={(val) => setDailyTarget(val.replace(/[^0-9]/g, ''))}
+                            keyboardType="number-pad"
+                            maxLength={3}
+                        />
                     </View>
                 </Animated.View>
 

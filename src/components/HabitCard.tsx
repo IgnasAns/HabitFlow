@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, memo, useCallback, useState } from 'react';
+import React, { useMemo, useEffect, memo, useCallback, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -176,20 +176,26 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
     const cardScale = useSharedValue(1);
     const progressValue = useSharedValue(progressToday / habit.dailyTarget);
     const [showIncrementOptions, setShowIncrementOptions] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
 
-    // Smart increment options based on daily target
+    // Smart increment options - filter out options >= remaining (check button handles completion)
     const getSmartIncrements = useMemo(() => {
         const target = habit.dailyTarget;
-        if (target <= 1) return [];
-        if (target <= 5) return [1];
-        if (target <= 10) return [1, 5];
-        if (target <= 25) return [1, 5, 10];
-        if (target <= 50) return [1, 5, 10, 25];
-        if (target <= 100) return [1, 5, 10, 25, 50];
-        if (target <= 500) return [1, 10, 25, 50, 100];
-        return [1, 10, 50, 100, 250];
-    }, [habit.dailyTarget]);
+        const remaining = target - progressToday;
+        if (target <= 1 || remaining <= 0) return [];
+
+        // Base options by target size
+        let baseOptions: number[];
+        if (target <= 5) baseOptions = [1];
+        else if (target <= 10) baseOptions = [1, 5];
+        else if (target <= 25) baseOptions = [1, 5, 10];
+        else if (target <= 50) baseOptions = [1, 5, 10, 25];
+        else if (target <= 100) baseOptions = [1, 5, 10, 25, 50];
+        else if (target <= 500) baseOptions = [1, 10, 25, 50, 100];
+        else baseOptions = [1, 10, 50, 100, 250];
+
+        // Filter: must be less than remaining (not equal - check button does that)
+        return baseOptions.filter(v => v < remaining);
+    }, [habit.dailyTarget, progressToday]);
 
     useEffect(() => {
         progressValue.value = withTiming(Math.min(1, progressToday / habit.dailyTarget), { duration: 200 });
@@ -204,12 +210,10 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
         right: 0,
     }));
 
-    const handleAction = useCallback(async (dateKey?: string) => {
-        if (isProcessing) return;
-        setIsProcessing(true);
+    const handleAction = useCallback((dateKey?: string) => {
         const targetKey = dateKey || todayKey;
 
-        // Provide haptic feedback and toggle
+        // Immediate haptic feedback
         triggerHaptic();
         if (!dateKey || dateKey === todayKey) {
             checkScale.value = withSequence(
@@ -218,38 +222,22 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
             );
         }
 
-        // We assume onToggle returns a promise (or we just wait a bit)
-        // Since we can't change the prop type easily to Promise without breaking chains, 
-        // we'll rely on the fact that the parent re-render will likely clear the processing state 
-        // when the new habits prop comes in. 
-        // However, safe timeout is better.
-        try {
-            await Promise.resolve(onToggle(habit.id, targetKey));
-        } finally {
-            // Re-enable after a shorter delay to feel responsive, 
-            // but long enough to block immediate double-tap
-            setTimeout(() => setIsProcessing(false), 200);
-        }
-    }, [onToggle, habit.id, todayKey, isProcessing]);
+        // Trigger action immediately (optimistic update in context)
+        onToggle(habit.id, targetKey);
+    }, [onToggle, habit.id, todayKey]);
 
-    const handleIncrement = useCallback(async (amount: number = 1) => {
-        if (isProcessing) return;
-        setIsProcessing(true);
-
+    const handleIncrement = useCallback((amount: number = 1) => {
+        // Immediate haptic feedback
         triggerHaptic();
-        try {
-            await Promise.resolve(onIncrement(habit.id, amount));
-            setShowIncrementOptions(false);
-        } finally {
-            setTimeout(() => setIsProcessing(false), 200);
-        }
-    }, [onIncrement, habit.id, isProcessing]);
+        setShowIncrementOptions(false);
+        // Trigger action immediately
+        onIncrement(habit.id, amount);
+    }, [onIncrement, habit.id]);
 
     const toggleIncrementOptions = useCallback(() => {
-        if (isProcessing) return;
         triggerSelectionHaptic();
         setShowIncrementOptions(prev => !prev);
-    }, [isProcessing]);
+    }, []);
 
     const handlePressIn = () => {
         cardScale.value = withSpring(0.97);
@@ -522,7 +510,7 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                                                 day={day}
                                                 size={squareSize}
                                                 themeColor={habitThemeColor}
-                                                onAction={() => { }} // Read-only grid as requested
+                                                onAction={handleAction}
                                                 opacityMultiplier={opacity}
                                                 colors={colors}
                                             />

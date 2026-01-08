@@ -6,6 +6,9 @@ const HABITS_KEY = '@habits';
 const USER_STATS_KEY = '@user_stats';
 const INITIALIZED_KEY = '@initialized';
 
+// In-memory cache for initialization state to avoid redundant storage reads
+let _isInitialized: boolean | null = null;
+
 // Generate unique ID
 export const generateId = (): string =>
     Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -202,10 +205,15 @@ export const storage = {
     // Habits CRUD
     async getHabits(): Promise<Habit[]> {
         try {
-            // Check if first launch
-            const initialized = await AsyncStorage.getItem(INITIALIZED_KEY);
-            if (!initialized) {
+            // Use cached initialization check to avoid redundant storage reads
+            if (_isInitialized === null) {
+                const initialized = await AsyncStorage.getItem(INITIALIZED_KEY);
+                _isInitialized = !!initialized;
+            }
+
+            if (!_isInitialized) {
                 await this.initializeDefaultHabits();
+                _isInitialized = true;
             }
 
             const data = await AsyncStorage.getItem(HABITS_KEY);
@@ -307,7 +315,6 @@ export const storage = {
         };
 
         habits[index] = updatedHabit;
-        await this.saveHabits(habits);
 
         const newXp = calculateHabitTotalXp(updatedHabit);
         const xpGained = newXp - oldXp;
@@ -315,10 +322,22 @@ export const storage = {
         let leveledUp = false;
         let newLevel: number | undefined;
 
+        // Batch save habits and stats together to reduce storage operations
         if (xpGained !== 0) {
-            const result = await this.addXp(xpGained);
-            leveledUp = result.leveledUp;
-            newLevel = result.newLevel;
+            const stats = await this.getUserStats();
+            const oldLevel = calculateLevel(stats.totalXp).level;
+            stats.totalXp = Math.max(0, stats.totalXp + xpGained);
+            const newLevelValue = calculateLevel(stats.totalXp).level;
+            leveledUp = newLevelValue > oldLevel;
+            newLevel = leveledUp ? newLevelValue : undefined;
+
+            // Batch both saves together
+            await AsyncStorage.multiSet([
+                [HABITS_KEY, JSON.stringify(habits)],
+                [USER_STATS_KEY, JSON.stringify(stats)]
+            ]);
+        } else {
+            await this.saveHabits(habits);
         }
 
         return {
@@ -364,7 +383,6 @@ export const storage = {
         };
 
         habits[index] = updatedHabit;
-        await this.saveHabits(habits);
 
         const newXp = calculateHabitTotalXp(updatedHabit);
         const xpGained = newXp - oldXp;
@@ -372,10 +390,21 @@ export const storage = {
         let leveledUp = false;
         let newLevel: number | undefined;
 
+        // Batch save habits and stats together
         if (xpGained !== 0) {
-            const result = await this.addXp(xpGained);
-            leveledUp = result.leveledUp;
-            newLevel = result.newLevel;
+            const stats = await this.getUserStats();
+            const oldLevel = calculateLevel(stats.totalXp).level;
+            stats.totalXp = Math.max(0, stats.totalXp + xpGained);
+            const newLevelValue = calculateLevel(stats.totalXp).level;
+            leveledUp = newLevelValue > oldLevel;
+            newLevel = leveledUp ? newLevelValue : undefined;
+
+            await AsyncStorage.multiSet([
+                [HABITS_KEY, JSON.stringify(habits)],
+                [USER_STATS_KEY, JSON.stringify(stats)]
+            ]);
+        } else {
+            await this.saveHabits(habits);
         }
 
         return {
@@ -430,6 +459,8 @@ export const storage = {
     async resetApp(): Promise<void> {
         try {
             await AsyncStorage.multiRemove([HABITS_KEY, USER_STATS_KEY, INITIALIZED_KEY]);
+            // Reset the cached initialization state
+            _isInitialized = null;
         } catch (error) {
             console.error('Error resetting app:', error);
         }

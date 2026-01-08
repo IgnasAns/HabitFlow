@@ -147,6 +147,8 @@ export const pt = {
         appExperience: 'EXPERIÊNCIA DO APP',
         smartReminders: 'Lembretes Inteligentes',
         smartRemindersDesc: 'Receba lembretes quando esquecer',
+        reminderTime: 'Hora do lembrete',
+        reminderTimeDesc: 'Quando receber o lembrete diário',
         testNotification: 'Notificação de teste (5s)',
         notificationScheduled: 'Notificação agendada para daqui a 5 segundos.\n\nPor favor, feche o aplicativo para ver.',
         testSent: 'Teste Enviado',

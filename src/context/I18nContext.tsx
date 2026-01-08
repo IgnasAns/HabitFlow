@@ -72,12 +72,13 @@ export function I18nProvider({ children }: I18nProviderProps) {
     }, []);
 
     const setLanguage = useCallback(async (lang: SupportedLanguage) => {
-        try {
-            await AsyncStorage.setItem(LANGUAGE_KEY, lang);
-            setLanguageState(lang);
-        } catch (error) {
+        // Immediate state update for instant UI response
+        setLanguageState(lang);
+
+        // Persist to storage in background (don't block UI)
+        AsyncStorage.setItem(LANGUAGE_KEY, lang).catch(error => {
             console.error('Error saving language:', error);
-        }
+        });
     }, []);
 
     const supportedLanguages: SupportedLanguage[] = ['en', 'es', 'de', 'fr', 'pt'];

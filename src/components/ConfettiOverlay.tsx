@@ -7,6 +7,7 @@ import Animated, {
     withDelay,
     runOnJS,
     Easing,
+    cancelAnimation,
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 
@@ -75,6 +76,15 @@ const ParticleComponent = ({ particle, onComplete }: { particle: Particle; onCom
             particle.delay + 1500,
             withTiming(0, { duration: 500 })
         );
+
+        // Cleanup: cancel animations on unmount
+        return () => {
+            cancelAnimation(translateY);
+            cancelAnimation(translateX);
+            cancelAnimation(opacity);
+            cancelAnimation(rotate);
+            cancelAnimation(scale);
+        };
     }, []);
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -134,13 +144,14 @@ export default function ConfettiOverlay({
 
     useEffect(() => {
         if (visible) {
+            const timestamp = Date.now();
             const newParticles: Particle[] = [];
             const typeEmojis = emojis[type];
 
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 const useEmoji = Math.random() > 0.6;
                 newParticles.push({
-                    id: i,
+                    id: timestamp + i, // Unique ID per particle per trigger
                     x: Math.random() * SCREEN_WIDTH,
                     delay: Math.random() * 300,
                     color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
@@ -164,7 +175,7 @@ export default function ConfettiOverlay({
     if (!visible || particles.length === 0) return null;
 
     return (
-        <View style={styles.container} pointerEvents="none">
+        <View style={styles.container}>
             {particles.map((particle) => (
                 <ParticleComponent
                     key={particle.id}
@@ -180,6 +191,7 @@ const styles = StyleSheet.create({
     container: {
         ...StyleSheet.absoluteFillObject,
         zIndex: 1000,
+        pointerEvents: 'none',
     },
     particle: {
         position: 'absolute',
