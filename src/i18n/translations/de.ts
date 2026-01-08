@@ -247,4 +247,25 @@ export const de = {
         resetTitle: 'Alle Daten zurücksetzen',
         resetMessage: 'Dies wird alle deine Gewohnheiten und Fortschritte löschen. Bist du sicher?',
     },
+
+    // Habit names (for suggested habits)
+    habits: {
+        wakeUpEarly: 'Vor 7 Uhr aufstehen',
+        workSession: 'Arbeitssession (4h)',
+        goToGym: 'Ins Fitnessstudio gehen',
+        drinkWater: '8 Gläser Wasser trinken',
+        read30min: '30 Minuten lesen',
+        noPhoneAfter10: 'Kein Handy nach 22 Uhr',
+        sleepBefore11: 'Vor 23 Uhr schlafen gehen',
+    },
+
+    // Notification messages
+    notifications: {
+        reminder1: { title: "Zeit, Gewohnheiten aufzubauen! 🎯", body: "Schau rein und schließe deine täglichen Gewohnheiten ab, um deine Serie zu halten." },
+        reminder2: { title: "Halte die Serie am Leben! 🔥", body: "Brich die Kette nicht. Mach heute deine Gewohnheiten!" },
+        reminder3: { title: "Investiere in dich selbst 🌱", body: "Kleine tägliche Aktionen führen zu großen Ergebnissen. Du schaffst das!" },
+        reminder4: { title: "Bereit fürs nächste Level? 🚀", body: "Schließe deine Gewohnheiten ab und verdiene XP für dein nächstes Level." },
+        reminder5: { title: "Du machst das großartig! 💪", body: "Beständigkeit ist der Schlüssel. Schau jetzt rein." },
+    },
 };
+

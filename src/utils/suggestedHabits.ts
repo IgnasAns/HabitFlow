@@ -1,7 +1,7 @@
 
-
 export interface SuggestedHabit {
-    name: string;
+    nameKey: string; // Translation key for the habit name
+    name: string; // Default name (English) for fallback
     icon: string;
     colorIndex: number;
     category: 'morning' | 'evening' | 'health' | 'productivity' | 'fitness';
@@ -9,118 +9,75 @@ export interface SuggestedHabit {
     dailyTarget?: number; // Daily count goal
 }
 
+// Core habits ordered by time of day (morning to evening)
+// These are the essential habits for a productive, healthy lifestyle
 export const suggestedHabits: SuggestedHabit[] = [
-    // Morning Routine
+    // Morning - Start the day right
     {
-        name: 'Wake up before 7:00 AM',
+        nameKey: 'habits.wakeUpEarly',
+        name: 'Wake up before 7am',
         icon: '☀️',
-        colorIndex: 6,
-        category: 'morning',
-        dailyTarget: 1,
-    },
-    {
-        name: 'Brush teeth (morning)',
-        icon: '🪥',
-        colorIndex: 3,
-        category: 'morning',
-        dailyTarget: 1,
-    },
-    {
-        name: 'Morning exercise',
-        icon: '🏃',
-        colorIndex: 1,
+        colorIndex: 6, // Gold/Yellow - morning sunshine
         category: 'morning',
         dailyTarget: 1,
     },
 
-    // Deep Work
+    // Productivity - Deep work
     {
-        name: '1st Deep Work Session (4h)',
-        icon: '🧠',
-        colorIndex: 0,
-        category: 'productivity',
-        dailyTarget: 1,
-    },
-    {
-        name: '2nd Deep Work Session (4h)',
+        nameKey: 'habits.workSession',
+        name: 'Work session (4h)',
         icon: '💻',
-        colorIndex: 0,
+        colorIndex: 0, // Purple - focus/productivity
         category: 'productivity',
-        dailyTarget: 1,
+        dailyTarget: 4, // Can track hours or just 1 for completion
     },
 
-    // Fitness
+    // Fitness - Stay active
     {
-        name: '100 Pushups',
-        icon: '💪',
-        colorIndex: 2,
-        category: 'fitness',
-        dailyTarget: 100,
-    },
-    {
-        name: '30 min HIIT',
-        icon: '🔥',
-        colorIndex: 5,
+        nameKey: 'habits.goToGym',
+        name: 'Go to the gym',
+        icon: '🏋️',
+        colorIndex: 2, // Red/Orange - energy/fitness
         category: 'fitness',
         dailyTarget: 1,
     },
 
-    // Evening Routine
+    // Health - Hydration
     {
-        name: 'Brush teeth (evening)',
-        icon: '🪥',
-        colorIndex: 3,
-        category: 'evening',
-        dailyTarget: 1,
-    },
-    {
-        name: 'Go to sleep before 11:00 PM',
-        icon: '🌙',
-        colorIndex: 5,
-        category: 'evening',
-        dailyTarget: 1,
-    },
-
-    // Health
-    {
+        nameKey: 'habits.drinkWater',
         name: 'Drink 8 glasses of water',
         icon: '💧',
-        colorIndex: 5,
+        colorIndex: 5, // Blue - water/calm
         category: 'health',
         dailyTarget: 8,
     },
+
+    // Productivity - Reading
     {
-        name: 'Take vitamins',
-        icon: '💊',
-        colorIndex: 4,
-        category: 'health',
-        dailyTarget: 1,
-    },
-    {
-        name: 'Meditation (10 min)',
-        icon: '🧘',
-        colorIndex: 7,
-        category: 'health',
-        dailyTarget: 1,
-    },
-    {
+        nameKey: 'habits.read30min',
         name: 'Read for 30 minutes',
         icon: '📚',
-        colorIndex: 6,
+        colorIndex: 1, // Green - growth/learning
         category: 'productivity',
         dailyTarget: 1,
     },
+
+    // Evening - Digital wellness
     {
-        name: 'Language Learning (3h)',
-        icon: '🎧',
-        colorIndex: 0,
-        category: 'productivity',
-        dailyTarget: 3,
+        nameKey: 'habits.noPhoneAfter10',
+        name: 'No phone after 10pm',
+        icon: '📵',
+        colorIndex: 4, // Pink - calm/digital detox
+        category: 'evening',
+        dailyTarget: 1,
     },
+
+    // Evening - Sleep hygiene
     {
-        name: 'No phone after 10 PM',
-        icon: '📱',
-        colorIndex: 4,
+        nameKey: 'habits.sleepBefore11',
+        name: 'Go to sleep before 11pm',
+        icon: '🌙',
+        colorIndex: 7, // Indigo - night/sleep
         category: 'evening',
         dailyTarget: 1,
     },

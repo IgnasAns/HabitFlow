@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { storage, calculateLevel, calculateHabitTotalXp, getTodayKey, calculateStreak } from '../utils/storage';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
@@ -134,6 +134,13 @@ interface HabitProviderProps {
 export function HabitProvider({ children }: HabitProviderProps) {
     const [state, dispatch] = useReducer(habitReducer, initialState);
 
+    // Use a ref to access latest state in callbacks without causing re-creation
+    // This is critical for performance - callbacks stay stable while still reading fresh state
+    const stateRef = useRef(state);
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
     // Load data on mount
     useEffect(() => {
         loadData();
@@ -197,8 +204,11 @@ export function HabitProvider({ children }: HabitProviderProps) {
     }, []);
 
     const toggleHabitCompletion = useCallback((id: string, dateKey?: string): ToggleResult | null => {
+        // Access state via ref to avoid callback recreation on every state change
+        const currentState = stateRef.current;
+
         // Find the habit in current state for optimistic update
-        const habit = state.habits.find(h => h.id === id);
+        const habit = currentState.habits.find(h => h.id === id);
         if (!habit) return null;
 
         const targetDateKey = dateKey || getTodayKey();
@@ -235,8 +245,8 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const newXp = calculateHabitTotalXp(updatedHabit);
         const xpGained = newXp - oldXp;
 
-        const currentLevel = calculateLevel(state.userStats.totalXp).level;
-        const newTotalXp = Math.max(0, state.userStats.totalXp + xpGained);
+        const currentLevel = calculateLevel(currentState.userStats.totalXp).level;
+        const newTotalXp = Math.max(0, currentState.userStats.totalXp + xpGained);
         const newLevel = calculateLevel(newTotalXp).level;
         const leveledUp = newLevel > currentLevel;
 
@@ -254,11 +264,14 @@ export function HabitProvider({ children }: HabitProviderProps) {
         // storage.toggleHabitCompletion(id, dateKey).catch(console.error);
 
         return result;
-    }, [state.habits, state.userStats.totalXp]);
+    }, []); // Empty deps - uses stateRef for fresh state
 
     const incrementHabitProgress = useCallback((id: string, amount: number, dateKey?: string): void => {
+        // Access state via ref to avoid callback recreation on every state change
+        const currentState = stateRef.current;
+
         // Find the habit in current state for optimistic update
-        const habit = state.habits.find(h => h.id === id);
+        const habit = currentState.habits.find(h => h.id === id);
         if (!habit) return;
 
         const targetDateKey = dateKey || getTodayKey();
@@ -289,8 +302,8 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const newXp = calculateHabitTotalXp(updatedHabit);
         const xpGained = newXp - oldXp;
 
-        const currentLevel = calculateLevel(state.userStats.totalXp).level;
-        const newTotalXp = Math.max(0, state.userStats.totalXp + xpGained);
+        const currentLevel = calculateLevel(currentState.userStats.totalXp).level;
+        const newTotalXp = Math.max(0, currentState.userStats.totalXp + xpGained);
         const newLevel = calculateLevel(newTotalXp).level;
         const leveledUp = newLevel > currentLevel;
 
@@ -306,13 +319,14 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
         // Persist via auto-save (debounced)
         // storage.incrementHabitProgress(id, amount, dateKey).catch(console.error);
-    }, [state.habits, state.userStats.totalXp]);
+    }, []); // Empty deps - uses stateRef for fresh state
 
     const moveHabit = useCallback(async (fromIndex: number, toIndex: number): Promise<void> => {
-        if (fromIndex < 0 || fromIndex >= state.habits.length || toIndex < 0 || toIndex >= state.habits.length) {
+        const currentHabits = stateRef.current.habits;
+        if (fromIndex < 0 || fromIndex >= currentHabits.length || toIndex < 0 || toIndex >= currentHabits.length) {
             return;
         }
-        const newHabits = [...state.habits];
+        const newHabits = [...currentHabits];
         const [moved] = newHabits.splice(fromIndex, 1);
         newHabits.splice(toIndex, 0, moved);
 
@@ -321,7 +335,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
         // Persist
         await storage.saveHabits(newHabits);
-    }, [state.habits]);
+    }, []);
 
     const reorderHabits = useCallback(async (habits: Habit[]): Promise<void> => {
         dispatch({ type: 'REORDER_HABITS', payload: habits });
@@ -370,7 +384,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
         refreshData: loadData,
         resetApp,
         importData,
-    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, clearLastAction, loadData, resetApp, importData]);
+    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, reorderHabits, clearLastAction, loadData, resetApp, importData]);
 
     return (
         <HabitContext.Provider value={value}>

@@ -247,6 +247,27 @@ export const en = {
         resetTitle: 'Reset All Data',
         resetMessage: 'This will delete all your habits and progress. Are you sure?',
     },
+
+    // Habit names (for suggested habits)
+    habits: {
+        wakeUpEarly: 'Wake up before 7am',
+        workSession: 'Work session (4h)',
+        goToGym: 'Go to the gym',
+        drinkWater: 'Drink 8 glasses of water',
+        read30min: 'Read for 30 minutes',
+        noPhoneAfter10: 'No phone after 10pm',
+        sleepBefore11: 'Go to sleep before 11pm',
+    },
+
+    // Notification messages
+    notifications: {
+        reminder1: { title: "Time to build habits! 🎯", body: "Check in and complete your daily habits to maintain your streak." },
+        reminder2: { title: "Keep the streak alive! 🔥", body: "Don't break the chain. Do your habits today!" },
+        reminder3: { title: "Invest in yourself 🌱", body: "Small daily actions lead to big results. You got this!" },
+        reminder4: { title: "Ready to level up? 🚀", body: "Complete your habits and gain XP towards your next level." },
+        reminder5: { title: "You're doing great! 💪", body: "Consistency is key. Check in now." },
+    },
 };
 
 export type TranslationKeys = typeof en;
+

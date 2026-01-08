@@ -13,7 +13,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { scheduleDailyReminder, cancelReminders, registerForPushNotificationsAsync, scheduleTestNotification } from '../utils/notifications';
+import { scheduleDailyReminder, cancelReminders, registerForPushNotificationsAsync, scheduleTestNotification, NotificationTranslations } from '../utils/notifications';
 import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, updateFeedbackSettings, FeedbackType, ImpactStyle } from '../utils/feedback';
 
 import StyledModal from './StyledModal';
@@ -88,7 +88,7 @@ export default function WidgetHub({ navigation }: any) {
                     // Enabling
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
-                            scheduleDailyReminder(reminderHour, reminderMinute);
+                            scheduleDailyReminder(reminderHour, reminderMinute, t.notifications as NotificationTranslations);
                             const timeStr = `${reminderHour.toString().padStart(2, '0')}:${reminderMinute.toString().padStart(2, '0')}`;
                             showInfo(t.settings.remindersSet, `You'll be reminded daily at ${timeStr} to check your habits.`, "✅");
                         } else {
@@ -138,7 +138,7 @@ export default function WidgetHub({ navigation }: any) {
 
         // Reschedule notification with new time if reminders are enabled
         if (smartReminders) {
-            scheduleDailyReminder(hour, minute);
+            scheduleDailyReminder(hour, minute, t.notifications as NotificationTranslations);
             const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
             showInfo(t.settings.remindersSet, `Reminder updated to ${timeStr}`, "🔔");
         }

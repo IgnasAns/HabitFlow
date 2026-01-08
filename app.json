@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitFlow",
     "slug": "HabitFlow",
-    "version": "1.8.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,8 +23,13 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ianskaitis.HabitFlow",
-      "versionCode": 9,
-      "allowBackup": true
+      "versionCode": 11,
+      "allowBackup": true,
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -126,6 +126,7 @@ export default function ConfettiOverlay({
     const [particles, setParticles] = useState<Particle[]>([]);
     const [completedCount, setCompletedCount] = useState(0);
     const { colors } = useTheme();
+    const isMountedRef = useRef(true);
 
     const confettiColors = [
         colors.primaryStart,
@@ -141,6 +142,21 @@ export default function ConfettiOverlay({
         levelUp: ['🎊', '🏆', '⬆️', '✨'],
         streak: ['🔥', '💪', '⭐'],
     };
+
+    // Track mounted state
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Stable callback for particle completion
+    const handleParticleComplete = useCallback(() => {
+        if (isMountedRef.current) {
+            setCompletedCount((c) => c + 1);
+        }
+    }, []);
 
     useEffect(() => {
         if (visible) {
@@ -163,14 +179,15 @@ export default function ConfettiOverlay({
             setCompletedCount(0);
         } else {
             setParticles([]);
+            setCompletedCount(0);
         }
     }, [visible, type]);
 
     useEffect(() => {
-        if (completedCount >= PARTICLE_COUNT && particles.length > 0) {
+        if (completedCount >= PARTICLE_COUNT && particles.length > 0 && isMountedRef.current) {
             onComplete?.();
         }
-    }, [completedCount, particles.length]);
+    }, [completedCount, particles.length, onComplete]);
 
     if (!visible || particles.length === 0) return null;
 
@@ -180,7 +197,7 @@ export default function ConfettiOverlay({
                 <ParticleComponent
                     key={particle.id}
                     particle={particle}
-                    onComplete={() => setCompletedCount((c) => c + 1)}
+                    onComplete={handleParticleComplete}
                 />
             ))}
         </View>
