@@ -87,7 +87,10 @@ export default function StatsScreen({ navigation }: any) {
                 return (h.completions[key] || 0) > 0;
             });
 
-            const completed = activeHabits.filter(h => (h.completions[key] || 0) >= (h.dailyTarget || 1)).length;
+            const completed = activeHabits.filter(h => {
+                const effectiveTarget = h.frequency === 'weekly' ? 1 : (h.dailyTarget || 1);
+                return (h.completions[key] || 0) >= effectiveTarget;
+            }).length;
 
             dayData.push({
                 date,
@@ -151,7 +154,8 @@ export default function StatsScreen({ navigation }: any) {
     // Calculate total completions (all-time)
     const totalCompletions = useMemo(() => {
         return habits.reduce((sum, h) => {
-            const doneDays = Object.keys(h.completions).filter(k => h.completions[k] >= (h.dailyTarget || 1)).length;
+            const effectiveTarget = h.frequency === 'weekly' ? 1 : (h.dailyTarget || 1);
+            const doneDays = Object.keys(h.completions).filter(k => h.completions[k] >= effectiveTarget).length;
             return sum + doneDays;
         }, 0);
     }, [habits]);
@@ -474,7 +478,7 @@ export default function StatsScreen({ navigation }: any) {
                                         {habit.name}
                                     </Text>
                                     <Text style={styles.topHabitStats}>
-                                        {Object.keys(habit.completions).filter(k => habit.completions[k] >= (habit.dailyTarget || 1)).length} {t.stats.completions.toLowerCase()}
+                                        {Object.keys(habit.completions).filter(k => habit.completions[k] >= (habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1))).length} {t.stats.completions.toLowerCase()}
                                     </Text>
                                 </View>
                                 <View style={styles.topHabitStreak}>

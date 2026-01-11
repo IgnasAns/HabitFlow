@@ -8,6 +8,7 @@ import {
     Pressable,
     KeyboardAvoidingView,
     Platform,
+    Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -42,6 +43,18 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
     const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
     const [dailyTarget, setDailyTarget] = useState('1');
 
+    // Time Slot State
+    const [hasTimeSlot, setHasTimeSlot] = useState(false);
+    const [startTime, setStartTime] = useState('09:00'); // Default start
+    const [endTime, setEndTime] = useState('17:00'); // Default end
+    const [reminderEnabled, setReminderEnabled] = useState(false);
+    const [activeTimePicker, setActiveTimePicker] = useState<'start' | 'end' | null>(null);
+
+    // Custom Time Picker State (for active picker)
+    const [customMode, setCustomMode] = useState(false);
+    const [localHour, setLocalHour] = useState('');
+    const [localMinute, setLocalMinute] = useState('');
+
     const activeThemeColor = colors.habitColors[selectedColor]?.[0] || colors.primaryStart;
 
     const buttonScale = useSharedValue(1);
@@ -62,6 +75,11 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
             frequency,
             dailyTarget: parseInt(dailyTarget) || 1,
             goal: 0, // Placeholder for total goal
+            timeSlot: hasTimeSlot ? {
+                start: startTime,
+                end: endTime,
+                reminder: reminderEnabled
+            } : undefined,
         });
 
         navigation.goBack();
@@ -201,6 +219,205 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                         />
                     </View>
                 </View>
+
+                {/* Time Slot Section */}
+                <Animated.View
+                    entering={FadeInDown.delay(250)}
+                    style={styles.section}
+                >
+                    <View style={styles.sectionHeaderTimeSlot}>
+                        <Text style={styles.sectionTitle}>{t.habit.timeSlot || "Time Slot"}</Text>
+                        <Switch
+                            value={hasTimeSlot}
+                            onValueChange={(v) => {
+                                triggerSelectionHaptic();
+                                setHasTimeSlot(v);
+                                if (!v) setReminderEnabled(false);
+                            }}
+                            trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                            thumbColor={'#fff'}
+                        />
+                    </View>
+
+                    {hasTimeSlot && (
+                        <Animated.View
+                            entering={FadeInDown}
+                            layout={Layout.springify()}
+                            style={styles.timeSlotContainer}
+                        >
+                            {/* Start/End Time Buttons */}
+                            <View style={styles.timeRow}>
+                                <Pressable
+                                    style={[styles.timeButton, activeTimePicker === 'start' && styles.timeButtonActive]}
+                                    onPress={() => {
+                                        triggerSelectionHaptic();
+                                        setActiveTimePicker(activeTimePicker === 'start' ? null : 'start');
+                                        setCustomMode(false);
+                                    }}
+                                >
+                                    <Text style={styles.timeLabel}>{t.habit.startTime || "Start"}</Text>
+                                    <Text style={styles.timeValue}>{startTime}</Text>
+                                </Pressable>
+
+                                <View style={styles.timeArrow}>
+                                    <Ionicons name="arrow-forward" size={20} color={colors.textMuted} />
+                                </View>
+
+                                <Pressable
+                                    style={[styles.timeButton, activeTimePicker === 'end' && styles.timeButtonActive]}
+                                    onPress={() => {
+                                        triggerSelectionHaptic();
+                                        setActiveTimePicker(activeTimePicker === 'end' ? null : 'end');
+                                        setCustomMode(false);
+                                    }}
+                                >
+                                    <Text style={styles.timeLabel}>{t.habit.endTime || "End"}</Text>
+                                    <Text style={styles.timeValue}>{endTime}</Text>
+                                </Pressable>
+                            </View>
+
+                            {/* Time Picker Options (WidgetHub Style) */}
+                            {activeTimePicker && (
+                                <View style={styles.timePickerContainer}>
+                                    <Text style={styles.pickerLabel}>{activeTimePicker === 'start' ? 'START TIME' : 'END TIME'}</Text>
+
+                                    <View style={styles.presetsContainer}>
+                                        {/* Helper Logic */}
+                                        {(() => {
+                                            // Get current value to highlight
+                                            const currentVal = activeTimePicker === 'start' ? startTime : endTime;
+                                            const [curH, curM] = currentVal.split(':').map(Number);
+
+                                            const PRESETS = [
+                                                { h: 7, m: 0, label: '7:00 AM' },
+                                                { h: 8, m: 0, label: '8:00 AM' },
+                                                { h: 9, m: 0, label: '9:00 AM' },
+                                                { h: 12, m: 0, label: '12:00 PM' },
+                                                { h: 17, m: 0, label: '5:00 PM' },
+                                                { h: 18, m: 0, label: '6:00 PM' },
+                                                { h: 21, m: 0, label: '9:00 PM' },
+                                                { h: 22, m: 0, label: '10:00 PM' },
+                                            ];
+
+                                            const currentPresetMatch = PRESETS.some(t => t.h === curH && t.m === curM);
+                                            const showCustomInput = customMode || !currentPresetMatch;
+
+                                            return (
+                                                <>
+                                                    {PRESETS.map((time) => {
+                                                        const isSelected = !customMode && curH === time.h && curM === time.m;
+                                                        return (
+                                                            <Pressable
+                                                                key={`${time.h}:${time.m}`}
+                                                                style={({ pressed }) => [
+                                                                    styles.presetButton,
+                                                                    isSelected && styles.presetButtonActive,
+                                                                    pressed && { opacity: 0.7 }
+                                                                ]}
+                                                                onPress={() => {
+                                                                    triggerSelectionHaptic();
+                                                                    setCustomMode(false);
+                                                                    const newTime = `${time.h.toString().padStart(2, '0')}:${time.m.toString().padStart(2, '0')}`;
+                                                                    if (activeTimePicker === 'start') setStartTime(newTime);
+                                                                    else setEndTime(newTime);
+                                                                }}
+                                                            >
+                                                                <Text style={[styles.presetText, isSelected && styles.presetTextActive]}>
+                                                                    {time.label}
+                                                                </Text>
+                                                            </Pressable>
+                                                        );
+                                                    })}
+
+                                                    {/* Custom Button */}
+                                                    <Pressable
+                                                        style={({ pressed }) => [
+                                                            styles.presetButton,
+                                                            showCustomInput && styles.presetButtonActive,
+                                                            pressed && { opacity: 0.7 }
+                                                        ]}
+                                                        onPress={() => {
+                                                            triggerSelectionHaptic();
+                                                            setCustomMode(true);
+                                                            // Init local input with current value
+                                                            setLocalHour(curH.toString().padStart(2, '0'));
+                                                            setLocalMinute(curM.toString().padStart(2, '0'));
+                                                        }}
+                                                    >
+                                                        <Text style={[styles.presetText, showCustomInput && styles.presetTextActive]}>
+                                                            CUSTOM
+                                                        </Text>
+                                                    </Pressable>
+                                                </>
+                                            );
+                                        })()}
+                                    </View>
+
+                                    {/* Manual Time Input */}
+                                    {customMode && (
+                                        <View style={styles.customInputContainer}>
+                                            <Text style={styles.customLabel}>CUSTOM TIME (24H)</Text>
+                                            <View style={styles.customInputRow}>
+                                                <TextInput
+                                                    style={styles.timeInput}
+                                                    value={localHour}
+                                                    onChangeText={setLocalHour}
+                                                    keyboardType="number-pad"
+                                                    maxLength={2}
+                                                    placeholder="HH"
+                                                    placeholderTextColor={colors.textMuted}
+                                                />
+                                                <Text style={styles.timeSeparator}>:</Text>
+                                                <TextInput
+                                                    style={styles.timeInput}
+                                                    value={localMinute}
+                                                    onChangeText={setLocalMinute}
+                                                    keyboardType="number-pad"
+                                                    maxLength={2}
+                                                    placeholder="MM"
+                                                    placeholderTextColor={colors.textMuted}
+                                                />
+                                                <Pressable
+                                                    style={styles.setButton}
+                                                    onPress={() => {
+                                                        triggerSelectionHaptic();
+                                                        const h = parseInt(localHour, 10) || 0;
+                                                        const m = parseInt(localMinute, 10) || 0;
+                                                        const hStr = Math.min(23, Math.max(0, h)).toString().padStart(2, '0');
+                                                        const mStr = Math.min(59, Math.max(0, m)).toString().padStart(2, '0');
+                                                        const newTime = `${hStr}:${mStr}`;
+
+                                                        if (activeTimePicker === 'start') setStartTime(newTime);
+                                                        else setEndTime(newTime);
+                                                    }}
+                                                >
+                                                    <Text style={styles.setButtonText}>SET</Text>
+                                                </Pressable>
+                                            </View>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+
+                            {/* Reminder Switch */}
+                            <View style={styles.reminderRow}>
+                                <View style={styles.reminderInfo}>
+                                    <Text style={styles.reminderTitle}>{t.habit.reminder || "Reminder"}</Text>
+                                    <Text style={styles.reminderDesc}>{t.habit.reminderDesc || "Get notified 15m before"}</Text>
+                                </View>
+                                <Switch
+                                    value={reminderEnabled}
+                                    onValueChange={(v) => {
+                                        triggerSelectionHaptic();
+                                        setReminderEnabled(v);
+                                    }}
+                                    trackColor={{ false: colors.bgCard, true: colors.primaryStart }}
+                                    thumbColor={'#fff'}
+                                />
+                            </View>
+                        </Animated.View>
+                    )}
+                </Animated.View>
 
                 {/* Icon Picker */}
                 <Animated.View
@@ -516,6 +733,171 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
         ...typography.body,
         color: colors.textPrimary,
         paddingVertical: spacing.md,
+    },
+    suggestionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+    },
+    suggestionChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.sm,
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    suggestionText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+    // Time Slot Styles
+    sectionHeaderTimeSlot: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.sm,
+    },
+    timeSlotContainer: {
+        marginTop: spacing.sm,
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.md,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.md,
+    },
+    timeButton: {
+        flex: 1,
+        backgroundColor: colors.bgCard,
+        padding: spacing.sm,
+        borderRadius: borderRadius.sm,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    timeButtonActive: {
+        borderColor: colors.primaryStart,
+        backgroundColor: colors.primaryStart + '10',
+    },
+    timeLabel: {
+        ...typography.caption,
+        color: colors.textMuted,
+        marginBottom: 2,
+    },
+    timeValue: {
+        ...typography.h3,
+        color: colors.textPrimary,
+    },
+    timeArrow: {
+        paddingHorizontal: spacing.sm,
+    },
+    timePickerContainer: {
+        backgroundColor: colors.bgDark,
+        borderRadius: borderRadius.sm,
+        padding: spacing.sm,
+        marginBottom: spacing.md,
+    },
+    pickerLabel: {
+        ...typography.small,
+        color: colors.textMuted,
+        marginBottom: spacing.sm,
+        fontWeight: 'bold',
+    },
+    presetsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.xs,
+    },
+    presetButton: {
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.sm,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    presetButtonActive: {
+        backgroundColor: colors.primaryStart,
+        borderColor: colors.primaryStart,
+    },
+    presetText: {
+        ...typography.small,
+        color: colors.textSecondary,
+    },
+    presetTextActive: {
+        color: '#fff',
+        fontWeight: '700',
+    },
+    customInputContainer: {
+        marginTop: spacing.md,
+    },
+    customLabel: {
+        ...typography.small,
+        color: colors.textMuted,
+        marginBottom: spacing.xs,
+    },
+    customInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    timeInput: {
+        width: 60,
+        height: 44,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        color: colors.textPrimary,
+        textAlign: 'center',
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    timeSeparator: {
+        color: colors.textPrimary,
+        fontSize: 24,
+        fontWeight: '700',
+    },
+    setButton: {
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.md,
+        backgroundColor: colors.primaryStart,
+        borderRadius: borderRadius.sm,
+        height: 44,
+        justifyContent: 'center',
+    },
+    setButtonText: {
+        color: '#fff',
+        fontWeight: '700',
+    },
+    reminderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: spacing.xs,
+        paddingTop: spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: colors.glassBorder,
+    },
+    reminderInfo: {
+        flex: 1,
+        paddingRight: spacing.sm,
+    },
+    reminderTitle: {
+        ...typography.bodyBold,
+        color: colors.textPrimary,
+    },
+    reminderDesc: {
+        ...typography.caption,
+        color: colors.textMuted,
     },
     iconGrid: {
         flexDirection: 'row',

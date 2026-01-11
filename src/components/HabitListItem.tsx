@@ -38,8 +38,36 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
     const weekDaysShort = [t.calendar.monday.charAt(0), t.calendar.tuesday.charAt(0), t.calendar.wednesday.charAt(0), t.calendar.thursday.charAt(0), t.calendar.friday.charAt(0), t.calendar.saturday.charAt(0), t.calendar.sunday.charAt(0)];
     const weekDaysSun = [t.calendar.sunday.charAt(0), t.calendar.monday.charAt(0), t.calendar.tuesday.charAt(0), t.calendar.wednesday.charAt(0), t.calendar.thursday.charAt(0), t.calendar.friday.charAt(0), t.calendar.saturday.charAt(0)];
     const todayKey = getTodayKey();
+    const isWeekly = habit.frequency === 'weekly';
+    const effectiveDailyTarget = isWeekly ? 1 : habit.dailyTarget;
+
+    // Weekly Progress Calculation
+    const weeklyProgress = useMemo(() => {
+        if (!isWeekly) return 0;
+        const today = new Date();
+        const day = today.getDay(); // 0-6 (Sun-Sat)
+        const diffToMon = day === 0 ? 6 : day - 1; // Mon=0, Sun=6
+
+        let sum = 0;
+        for (let i = 0; i <= diffToMon; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
+            const key = parseDateKey(date.toISOString().split('T')[0]).toISOString().split('T')[0]; // Use safer key gen if possible, but storage uses simple string
+            // Actually, let's use the keys directly from utilities if available or reconstruct manually safely
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const dStr = String(date.getDate()).padStart(2, '0');
+            const dKey = `${y}-${m}-${dStr}`;
+
+            if (habit.completions[dKey] >= 1) {
+                sum += 1;
+            }
+        }
+        return sum;
+    }, [habit.completions, isWeekly]);
+
     const progressToday = habit.completions[todayKey] || 0;
-    const isCompletedToday = progressToday >= habit.dailyTarget;
+    const isCompletedToday = progressToday >= effectiveDailyTarget;
     const isExplicitlyFailedToday = habit.explicitFailures?.[todayKey] === true;
     const habitThemeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
 
@@ -48,6 +76,8 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
     // Smart increment options based on REMAINING amount (not target)
     // Excludes options that would complete the habit (check button does that)
     const smartIncrements = useMemo(() => {
+        if (isWeekly) return []; // No smart increments for weekly habits (simple toggle)
+
         const target = habit.dailyTarget;
         const remaining = target - progressToday;
         if (target <= 1 || remaining <= 0) return [];
@@ -62,7 +92,7 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
         // Pick +1 and the largest useful option
         const largest = validOptions[validOptions.length - 1];
         return [1, largest];
-    }, [habit.dailyTarget, progressToday]);
+    }, [habit.dailyTarget, progressToday, isWeekly]);
 
     const isMonthly = daysToShow > 7;
 
@@ -142,7 +172,12 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{habit.name}</Text>
                     <Text style={styles.meta}>
-                        {progressToday}/{habit.dailyTarget} • {habit.streak}🔥
+                        {isWeekly ? (
+                            `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}🔥`
+                        ) : (
+                            `${progressToday}/${habit.dailyTarget} ${t.common.today} • ${habit.streak}🔥`
+                        )}
+                        {habit.timeSlot && ` • ⏰ ${habit.timeSlot.start}-${habit.timeSlot.end}`}
                     </Text>
                 </View>
 
@@ -202,7 +237,7 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                                 <Text style={styles.checkMark}>✓</Text>
                             ) : isExplicitlyFailedToday ? (
                                 <Text style={styles.checkMark}>×</Text>
-                            ) : habit.dailyTarget > 1 && progressToday > 0 ? (
+                            ) : habit.dailyTarget > 1 && !isWeekly && progressToday > 0 ? (
                                 <Text style={{ color: habitThemeColor, fontSize: 13, fontWeight: '800' }}>{progressToday}</Text>
                             ) : (
                                 <Text style={[styles.plusIcon, { color: habitThemeColor }]}>+</Text>

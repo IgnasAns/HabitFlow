@@ -31,12 +31,14 @@ export const getDateKey = (date: Date): string => {
 };
 
 // Calculate streak for a habit
-export const calculateStreak = (completions: Record<string, number>, dailyTarget: number): number => {
+export const calculateStreak = (completions: Record<string, number>, dailyTarget: number, frequency: Habit['frequency'] = 'daily'): number => {
     if (!completions) return 0;
+
+    const effectiveTarget = frequency === 'weekly' ? 1 : dailyTarget;
 
     // Get all completed dates, filter by target, sort in reverse chronological order
     const completedDates = Object.keys(completions)
-        .filter(k => completions[k] >= dailyTarget)
+        .filter(k => completions[k] >= effectiveTarget)
         .sort()
         .reverse();
 
@@ -93,8 +95,10 @@ export const calculateLevel = (totalXp: number): LevelInfo => {
 
 // Storage operations
 // Calculate streak ending at a specific date
-export const calculateStreakForDate = (completions: Record<string, number>, dailyTarget: number, endDate: Date): number => {
+export const calculateStreakForDate = (completions: Record<string, number>, dailyTarget: number, endDate: Date, frequency: Habit['frequency'] = 'daily'): number => {
     if (!completions) return 0;
+
+    const effectiveTarget = frequency === 'weekly' ? 1 : dailyTarget;
 
     // Create a temporary date object to traverse backwards
     let currentDate = new Date(endDate);
@@ -103,7 +107,7 @@ export const calculateStreakForDate = (completions: Record<string, number>, dail
     // Check backwards for 365 days max to prevent infinite loops (though unlikely)
     for (let i = 0; i < 365; i++) {
         const dateKey = getDateKey(currentDate);
-        if ((completions[dateKey] || 0) >= dailyTarget) {
+        if ((completions[dateKey] || 0) >= effectiveTarget) {
             streak++;
             currentDate.setDate(currentDate.getDate() - 1);
         } else {
@@ -118,10 +122,11 @@ export const calculateStreakForDate = (completions: Record<string, number>, dail
 // It fixes "phantom XP" bugs where adding/removing completions in the past would desync the total XP
 export const calculateHabitTotalXp = (habit: Habit): number => {
     let xp = 0;
-    const dailyTarget = habit.dailyTarget || 1;
+    const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
+
     // Get all completed dates
     const completedDates = Object.keys(habit.completions)
-        .filter(k => habit.completions[k] >= dailyTarget)
+        .filter(k => habit.completions[k] >= effectiveTarget)
         .sort(); // YYYY-MM-DD sorts alphabetically correctly
 
     if (completedDates.length === 0) return 0;
@@ -284,16 +289,16 @@ export const storage = {
         const targetDateKey = dateKey || getTodayKey();
         const completions = { ...habit.completions };
         const explicitFailures = { ...(habit.explicitFailures || {}) };
-        const dailyTarget = habit.dailyTarget || 1;
+        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
 
         const currentCount = completions[targetDateKey] || 0;
         const isExplicitlyFailed = explicitFailures[targetDateKey] || false;
-        const isCompleted = currentCount >= dailyTarget;
+        const isCompleted = currentCount >= effectiveTarget;
 
         // Three-state cycle: empty → completed → explicitly failed → empty
         if (!isCompleted && !isExplicitlyFailed) {
             // State: empty → completed
-            completions[targetDateKey] = dailyTarget;
+            completions[targetDateKey] = effectiveTarget;
             delete explicitFailures[targetDateKey];
         } else if (isCompleted && !isExplicitlyFailed) {
             // State: completed → explicitly failed
@@ -305,7 +310,7 @@ export const storage = {
             delete explicitFailures[targetDateKey];
         }
 
-        const streak = calculateStreak(completions, dailyTarget);
+        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
 
         const updatedHabit = {
             ...habit,
@@ -357,13 +362,13 @@ export const storage = {
         const oldXp = calculateHabitTotalXp(habit);
 
         const targetDateKey = dateKey || getTodayKey();
-        const dailyTarget = habit.dailyTarget || 1;
+        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
         const completions = { ...habit.completions };
 
         const oldProgress = completions[targetDateKey] || 0;
-        const newProgress = Math.min(dailyTarget, Math.max(0, oldProgress + amount));
+        const newProgress = Math.min(effectiveTarget, Math.max(0, oldProgress + amount));
 
-        if (oldProgress >= dailyTarget && amount > 0) return null;
+        if (oldProgress >= effectiveTarget && amount > 0) return null;
 
         completions[targetDateKey] = newProgress;
 
@@ -373,7 +378,7 @@ export const storage = {
             delete explicitFailures[targetDateKey];
         }
 
-        const streak = calculateStreak(completions, dailyTarget);
+        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
 
         const updatedHabit = {
             ...habit,
@@ -475,6 +480,7 @@ export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => 
     const createdDate = new Date(habit.createdAt);
     createdDate.setHours(0, 0, 0, 0);
     const explicitFailures = habit.explicitFailures || {};
+    const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
 
     for (let i = totalDays - 1; i >= 0; i--) {
         const date = new Date(today);
@@ -483,8 +489,7 @@ export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => 
         const dateKey = getDateKey(date);
 
         const progress = habit.completions[dateKey] || 0;
-        const dailyTarget = habit.dailyTarget || 1;
-        const isCompleted = progress >= dailyTarget;
+        const isCompleted = progress >= effectiveTarget;
         const isToday = dateKey === todayKey;
         const isExplicitlyFailed = explicitFailures[dateKey] || false;
 
@@ -497,7 +502,7 @@ export const generateGridData = (habit: Habit, totalDays: number): GridDay[] => 
         gridData.push({
             key: dateKey,
             progress,
-            dailyTarget,
+            dailyTarget: effectiveTarget,
             isCompleted,
             isMissed,
             isInactive,
@@ -518,6 +523,7 @@ export const generateCalendarMonthData = (habit: Habit, year: number, month: num
 
     const createdDate = new Date(habit.createdAt);
     createdDate.setHours(0, 0, 0, 0);
+    const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
 
     const explicitFailures = habit.explicitFailures || {};
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -528,8 +534,7 @@ export const generateCalendarMonthData = (habit: Habit, year: number, month: num
         const dateKey = getDateKey(date);
 
         const progress = habit.completions[dateKey] || 0;
-        const dailyTarget = habit.dailyTarget || 1;
-        const isCompleted = progress >= dailyTarget;
+        const isCompleted = progress >= effectiveTarget;
         const isToday = dateKey === todayKey;
         const isExplicitlyFailed = explicitFailures[dateKey] || false;
 
@@ -545,7 +550,7 @@ export const generateCalendarMonthData = (habit: Habit, year: number, month: num
         gridData.push({
             key: dateKey,
             progress,
-            dailyTarget,
+            dailyTarget: effectiveTarget,
             isCompleted,
             isMissed,
             isInactive,

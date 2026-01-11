@@ -14,6 +14,11 @@ export interface Habit {
     explicitFailures: Record<string, boolean>; // dateKey -> true if explicitly marked as 'x'
     streak: number;
     archived?: boolean;
+    timeSlot?: {
+        start: string; // "HH:mm" 24h format
+        end: string;   // "HH:mm"
+        reminder: boolean; // true if reminder is enabled (15min before start)
+    };
 }
 
 export interface UserStats {

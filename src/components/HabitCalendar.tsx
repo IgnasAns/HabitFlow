@@ -51,7 +51,9 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
                 const dateKey = getDateKey(date);
 
                 const progress = habit.completions[dateKey] || 0;
-                const isCompleted = progress >= habit.dailyTarget;
+                const isWeekly = habit.frequency === 'weekly';
+                const effectiveTarget = isWeekly ? 1 : habit.dailyTarget;
+                const isCompleted = progress >= effectiveTarget;
                 const isExplicitlyFailed = habit.explicitFailures?.[dateKey];
                 const isToday = dateKey === getDateKey(new Date());
 

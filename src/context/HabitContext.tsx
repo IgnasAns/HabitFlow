@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { storage, calculateLevel, calculateHabitTotalXp, getTodayKey, calculateStreak } from '../utils/storage';
+import { scheduleHabitReminder, cancelHabitReminder } from '../utils/notifications';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
 // Action types
@@ -187,6 +188,13 @@ export function HabitProvider({ children }: HabitProviderProps) {
     const addHabit = useCallback(async (habitData: Omit<Habit, 'id' | 'createdAt' | 'completions' | 'streak' | 'explicitFailures'>): Promise<Habit> => {
         const newHabit = await storage.addHabit(habitData);
         dispatch({ type: 'ADD_HABIT', payload: newHabit });
+
+        // Schedule notification if timeslot reminder is enabled
+        if (newHabit.timeSlot?.reminder) {
+            const [h, m] = newHabit.timeSlot.start.split(':').map(Number);
+            await scheduleHabitReminder(newHabit.id, newHabit.name, h, m).catch(console.error);
+        }
+
         return newHabit;
     }, []);
 
@@ -194,11 +202,24 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const updated = await storage.updateHabit(id, updates);
         if (updated) {
             dispatch({ type: 'UPDATE_HABIT', payload: updated });
+
+            // Handle reminders
+            if (updated.timeSlot?.reminder && !updated.archived) {
+                const [h, m] = updated.timeSlot.start.split(':').map(Number);
+                await scheduleHabitReminder(updated.id, updated.name, h, m).catch(console.error);
+            } else {
+                // If reminder disabled, or habit archived, or timeslot removed
+                // The schedule function handles cancellation if rescheduling, but here we explicit cancel if turned off
+                if (!updated.timeSlot?.reminder || updated.archived) {
+                    await cancelHabitReminder(updated.id).catch(console.error);
+                }
+            }
         }
         return updated;
     }, []);
 
     const deleteHabit = useCallback(async (id: string): Promise<void> => {
+        await cancelHabitReminder(id).catch(console.error);
         await storage.deleteHabit(id);
         dispatch({ type: 'DELETE_HABIT', payload: id });
     }, []);
@@ -214,15 +235,17 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const targetDateKey = dateKey || getTodayKey();
         const completions = { ...habit.completions };
         const explicitFailures = { ...(habit.explicitFailures || {}) };
-        const dailyTarget = habit.dailyTarget || 1;
+
+        // FOR WEEKLY: Max daily target is 1 (completed or not). The "dailyTarget" prop stores the Weekly Goal.
+        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
 
         const currentCount = completions[targetDateKey] || 0;
         const isExplicitlyFailed = explicitFailures[targetDateKey] || false;
-        const isCompleted = currentCount >= dailyTarget;
+        const isCompleted = currentCount >= effectiveTarget;
 
         // Three-state cycle: empty → completed → explicitly failed → empty
         if (!isCompleted && !isExplicitlyFailed) {
-            completions[targetDateKey] = dailyTarget;
+            completions[targetDateKey] = effectiveTarget;
             delete explicitFailures[targetDateKey];
         } else if (isCompleted && !isExplicitlyFailed) {
             completions[targetDateKey] = 0;
@@ -232,7 +255,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
             delete explicitFailures[targetDateKey];
         }
 
-        const streak = calculateStreak(completions, dailyTarget);
+        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
         const oldXp = calculateHabitTotalXp(habit);
 
         const updatedHabit = {
@@ -275,13 +298,14 @@ export function HabitProvider({ children }: HabitProviderProps) {
         if (!habit) return;
 
         const targetDateKey = dateKey || getTodayKey();
-        const dailyTarget = habit.dailyTarget || 1;
+        // FOR WEEKLY: Max daily target is 1
+        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
         const completions = { ...habit.completions };
 
         const oldProgress = completions[targetDateKey] || 0;
-        if (oldProgress >= dailyTarget && amount > 0) return;
+        if (oldProgress >= effectiveTarget && amount > 0) return;
 
-        const newProgress = Math.min(dailyTarget, Math.max(0, oldProgress + amount));
+        const newProgress = Math.min(effectiveTarget, Math.max(0, oldProgress + amount));
         completions[targetDateKey] = newProgress;
 
         const explicitFailures = { ...(habit.explicitFailures || {}) };
@@ -289,7 +313,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
             delete explicitFailures[targetDateKey];
         }
 
-        const streak = calculateStreak(completions, dailyTarget);
+        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
         const oldXp = calculateHabitTotalXp(habit);
 
         const updatedHabit = {

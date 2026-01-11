@@ -171,6 +171,30 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
     const isCompletedToday = progressToday >= habit.dailyTarget;
     const isExplicitlyFailedToday = habit.explicitFailures?.[todayKey] === true;
     const habitThemeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
+    const isWeekly = habit.frequency === 'weekly';
+
+    // Weekly Progress Calculation (Matches HabitListItem)
+    const weeklyProgress = useMemo(() => {
+        if (!isWeekly) return 0;
+        const today = new Date();
+        const day = today.getDay(); // 0-6 (Sun-Sat)
+        const diffToMon = day === 0 ? 6 : day - 1; // Mon=0, Sun=6
+
+        let sum = 0;
+        for (let i = 0; i <= diffToMon; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const dStr = String(date.getDate()).padStart(2, '0');
+            const dKey = `${y}-${m}-${dStr}`;
+
+            if ((habit.completions[dKey] || 0) >= 1) {
+                sum += 1;
+            }
+        }
+        return sum;
+    }, [habit.completions, isWeekly]);
 
     const checkScale = useSharedValue(1);
     const cardScale = useSharedValue(1);
@@ -341,7 +365,12 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                             </Text>
                             <View style={styles.descriptionRow}>
                                 <Text style={styles.description} numberOfLines={1}>
-                                    {progressToday}/{habit.dailyTarget} today • {habit.streak}🔥
+                                    {isWeekly ? (
+                                        `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}🔥`
+                                    ) : (
+                                        `${progressToday}/${habit.dailyTarget} today • ${habit.streak}🔥`
+                                    )}
+                                    {habit.timeSlot && ` • ⏰ ${habit.timeSlot.start}-${habit.timeSlot.end}`}
                                 </Text>
                                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} style={{ marginLeft: 4 }} />
                             </View>
