@@ -225,7 +225,7 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                                     ? { backgroundColor: habitThemeColor, borderColor: habitThemeColor }
                                     : isExplicitlyFailedToday
                                         ? { backgroundColor: colors.dangerStart, borderColor: colors.dangerStart }
-                                        : { borderColor: habitThemeColor + '50', backgroundColor: 'transparent' }
+                                        : { borderColor: habitThemeColor, backgroundColor: habitThemeColor + '15' }
                             ]}
                             onPress={(e) => {
                                 e.stopPropagation();

@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitFlow",
     "slug": "HabitFlow",
-    "version": "2.0.1",
+    "version": "2.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ianskaitis.HabitFlow",
-      "versionCode": 12,
+      "versionCode": 17,
       "allowBackup": true,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
@@ -45,6 +45,57 @@
         {
           "icon": "./assets/icon.png",
           "color": "#ffffff"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "WeeklyHabitWidget",
+              "label": "Habit - Weekly",
+              "description": "Shows your habit progress for the current week",
+              "minWidth": "180dp",
+              "minHeight": "70dp",
+              "previewImage": "./assets/weekly_widget_preview.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "MonthlyHabitWidget",
+              "label": "Habit - Monthly",
+              "description": "Shows your habit progress for the past month",
+              "minWidth": "180dp",
+              "minHeight": "140dp",
+              "previewImage": "./assets/monthly_widget_preview.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "GitHubHabitWidget",
+              "label": "Habit - GitHub Grid",
+              "description": "Shows your habit progress in a GitHub contribution graph style",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "previewImage": "./assets/github_widget_preview.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "SmallHabitWidget",
+              "label": "Habit - Day Check",
+              "description": "1×1 tap to toggle today's habit",
+              "minWidth": "40dp",
+              "minHeight": "40dp",
+              "previewImage": "./assets/small_widget_preview.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            }
+          ]
         }
       ]
     ],

@@ -11,6 +11,7 @@ import StatsScreen from '../screens/StatsScreen';
 import WidgetHub from '../components/WidgetHub';
 import ShareScreen from '../screens/ShareScreen';
 import HabitDetailScreen from '../screens/HabitDetailScreen';
+import WidgetPreviewScreen from '../screens/WidgetPreviewScreen';
 
 // Navigation types
 export type RootStackParamList = {
@@ -19,6 +20,7 @@ export type RootStackParamList = {
     EditHabit: { habitId: string };
     Stats: undefined;
     WidgetHub: undefined;
+    WidgetPreview: undefined;
     Share: undefined;
     HabitDetail: { habitId: string };
 };
@@ -96,6 +98,15 @@ export default function AppNavigator() {
                 <Stack.Screen
                     name="WidgetHub"
                     component={WidgetHub}
+                    options={{
+                        headerShown: false,
+                        presentation: 'modal',
+                        animation: 'fade_from_bottom',
+                    }}
+                />
+                <Stack.Screen
+                    name="WidgetPreview"
+                    component={WidgetPreviewScreen}
                     options={{
                         headerShown: false,
                         presentation: 'modal',

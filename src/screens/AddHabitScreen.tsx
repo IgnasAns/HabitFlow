@@ -30,16 +30,19 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function AddHabitScreen({ navigation }: { navigation: NativeStackNavigationProp<any> }) {
-    const { addHabit } = useHabits();
+    const { addHabit, habits } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => getStyles(colors, insets), [colors, insets]);
 
+    // Auto-cycle color: next unused color based on existing habit count
+    const autoColor = habits.length % colors.habitColors.length;
+
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [selectedIcon, setSelectedIcon] = useState('💪');
-    const [selectedColor, setSelectedColor] = useState(0);
+    const [selectedColor, setSelectedColor] = useState(autoColor);
     const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
     const [dailyTarget, setDailyTarget] = useState('1');
 
@@ -627,12 +630,12 @@ export default function AddHabitScreen({ navigation }: { navigation: NativeStack
                     disabled={!name.trim()}
                 >
                     <LinearGradient
-                        colors={name.trim() ? [...colors.success] : ['#444', '#333']}
+                        colors={name.trim() ? [...colors.success] : [colors.glass, colors.glass]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={styles.saveButtonGradient}
                     >
-                        <Text style={styles.saveButtonText}>{t.habit.createHabit}</Text>
+                        <Text style={[styles.saveButtonText, name.trim() && { color: '#fff' }]}>{t.habit.createHabit}</Text>
                     </LinearGradient>
                 </AnimatedPressable>
             </View>
@@ -1066,7 +1069,7 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
     },
     saveButtonText: {
         ...typography.bodyBold,
-        color: colors.textPrimary,
+        color: colors.textSecondary,
         fontSize: 18,
     },
 });

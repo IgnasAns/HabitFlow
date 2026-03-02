@@ -222,7 +222,7 @@ export default function WidgetHub({ navigation }: any) {
         for (let i = 0; i < 30; i++) {
             const d = new Date();
             d.setDate(now.getDate() - i);
-            const key = d.toISOString().split('T')[0];
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
             activeHabits.forEach(h => {
                 // Approximate: Check if habit was created before this date? 
@@ -247,7 +247,7 @@ export default function WidgetHub({ navigation }: any) {
                 habits,
                 userStats,
                 exportedAt: new Date().toISOString(),
-                appVersion: '1.7.0'
+                appVersion: '2.2.1'
             };
             await Share.share({
                 message: JSON.stringify(data, null, 2),
@@ -647,6 +647,13 @@ export default function WidgetHub({ navigation }: any) {
 
                 <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleImport}>
                     <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>{t.settings.importData}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.exportButton, { marginTop: 10, borderColor: colors.primaryStart }]}
+                    onPress={() => navigation?.navigate('WidgetPreview')}
+                >
+                    <Text style={[styles.exportButtonText, { color: colors.primaryStart }]}>🧪 Widget Preview (Dev)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

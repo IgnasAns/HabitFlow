@@ -1,16 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Configure how notifications are handled when app is in foreground
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-    }),
-});
+// Note: Notification handler is configured in App.tsx with full options
+// Do not duplicate setNotificationHandler here
 
 export async function registerForPushNotificationsAsync() {
     let token;
@@ -231,6 +223,9 @@ export async function clearGlobalReminders() {
         console.error('Error clearing global reminders:', error);
     }
 }
+
+// Alias for backward compatibility
+export const cancelReminders = clearGlobalReminders;
 
 export async function scheduleTestNotification() {
     if (Platform.OS === 'web') {

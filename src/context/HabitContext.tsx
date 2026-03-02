@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { storage, calculateLevel, calculateHabitTotalXp, getTodayKey, calculateStreak } from '../utils/storage';
 import { scheduleHabitReminder, cancelHabitReminder } from '../utils/notifications';
+import { updateWidgetData } from '../utils/widgetData';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
 // Action types
@@ -177,6 +178,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
     useEffect(() => {
         if (state.isLoading) return;
 
+        // Update widgets immediately so they reflect changes instantly
+        updateWidgetData(state.habits).catch(console.error);
+
+        // Debounce storage save (heavier I/O) to prevent lag
         const timer = setTimeout(() => {
             storage.saveHabits(state.habits).catch(console.error);
             storage.saveUserStats(state.userStats).catch(console.error);
@@ -283,6 +288,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
         // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback
         dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
 
+        // Update widgets immediately with the new habits array
+        const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
+        updateWidgetData(updatedHabits).catch(console.error);
+
         // Persist via auto-save effect
         // storage.toggleHabitCompletion(id, dateKey).catch(console.error);
 
@@ -340,6 +349,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
         // OPTIMISTIC UPDATE: Dispatch immediately
         dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+
+        // Update widgets immediately with the new habits array
+        const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
+        updateWidgetData(updatedHabits).catch(console.error);
 
         // Persist via auto-save (debounced)
         // storage.incrementHabitProgress(id, amount, dateKey).catch(console.error);

@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -8,6 +7,7 @@ import { HabitProvider } from './src/context/HabitContext';
 import { I18nProvider } from './src/context/I18nContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import ThemedStatusBar from './src/components/ThemedStatusBar';
 import { colors } from './src/theme';
 
 import { initFeedbackSettings } from './src/utils/feedback';
@@ -48,7 +48,7 @@ export default function App() {
                 <I18nProvider>
                     <HabitProvider>
                         <View style={styles.container}>
-                            <StatusBar style="light" hidden={false} translucent backgroundColor="transparent" />
+                            <ThemedStatusBar />
                             <AppNavigator />
                         </View>
                     </HabitProvider>
