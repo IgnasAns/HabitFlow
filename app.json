@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitFlow",
     "slug": "HabitFlow",
-    "version": "2.2.1",
+    "version": "2.4.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ianskaitis.HabitFlow",
-      "versionCode": 17,
+      "versionCode": 20,
       "allowBackup": true,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
