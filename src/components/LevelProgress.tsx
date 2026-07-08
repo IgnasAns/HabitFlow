@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { triggerSelectionHaptic } from '../utils/feedback';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import StyledModal from './StyledModal';
 
@@ -128,7 +128,7 @@ const LevelProgress = React.memo(({
 export default LevelProgress;
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         padding: spacing.md,
         backgroundColor: colors.glass,

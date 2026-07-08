@@ -1,7 +1,7 @@
 import React, { useMemo, memo } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import { getDateKey } from '../utils/storage';
 import { useI18n, interpolate } from '../context/I18nContext';
@@ -222,7 +222,7 @@ const HabitCircleCalendar = memo(({
 export default HabitCircleCalendar;
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         backgroundColor: colors.glass,
         borderRadius: borderRadius.lg,

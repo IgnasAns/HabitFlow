@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, borderRadius, typography } from '../theme';
 import HabitCalendar from '../components/HabitCalendar';
 import { Ionicons } from '@expo/vector-icons';
@@ -134,7 +134,7 @@ export default function HabitDetailScreen({ route, navigation }: Props) {
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

@@ -6,7 +6,7 @@ import Animated, {
     withSequence,
     useSharedValue,
 } from 'react-native-reanimated';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { typography, spacing } from '../theme';
 
 type BadgeSize = 'small' | 'medium' | 'large';
@@ -70,7 +70,7 @@ export default function StreakBadge({ streak = 0, size = 'small' }: StreakBadgeP
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',

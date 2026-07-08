@@ -1,13 +1,14 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, typography, borderRadius, shadows } from '../theme';
 import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -245,7 +246,7 @@ export default function ShareScreen({ navigation }: any) {
     );
 }
 
-const getStyles = (colors: any, insets: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bgDark },
     scrollContent: { flexGrow: 1 },
     capturePadding: {

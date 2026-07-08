@@ -12,7 +12,7 @@ import Animated, {
     FadeIn,
     FadeOut,
 } from 'react-native-reanimated';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, borderRadius, typography, shadows } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -109,7 +109,7 @@ export default function ConfirmationModal({
 }
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: 'center',

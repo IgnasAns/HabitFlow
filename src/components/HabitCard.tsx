@@ -18,7 +18,7 @@ import Animated, {
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, typography, shadows } from '../theme';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Habit, GridDay } from '../types';
@@ -47,7 +47,7 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction, opacityMultipl
     themeColor: string;
     onAction: (key: string) => void;
     opacityMultiplier?: number;
-    colors: any;
+    colors: ThemeColors;
 }) => {
     // Calculate background color directly
     const getBackgroundColor = () => {
@@ -442,6 +442,9 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                                     e.stopPropagation();
                                     handleAction();
                                 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={habit.name}
+                                accessibilityState={{ checked: isCompletedToday }}
                             >
                                 {!isCompletedToday && !isExplicitlyFailedToday && <Animated.View style={progressStyle} />}
                                 {isCompletedToday ? (
@@ -558,7 +561,7 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
 export default React.memo(HabitCard);
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         marginHorizontal: spacing.md,
         marginBottom: spacing.md,

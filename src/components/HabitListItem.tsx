@@ -16,7 +16,7 @@ import Animated, {
 import { triggerHaptic, ImpactStyle } from '../utils/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { spacing, borderRadius, typography } from '../theme';
 import { getTodayKey, generateGridData, generateCalendarMonthData, parseDateKey } from '../utils/storage';
 import { Habit } from '../types';
@@ -232,6 +232,9 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                                 handleAction();
                             }}
                             delayLongPress={300}
+                            accessibilityRole="button"
+                            accessibilityLabel={habit.name}
+                            accessibilityState={{ checked: isCompletedToday }}
                         >
                             {isCompletedToday ? (
                                 <Text style={styles.checkMark}>✓</Text>
@@ -344,7 +347,7 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
 export default memo(HabitListItem);
 
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
     container: {
         flexDirection: 'column',
         alignItems: 'flex-start',
