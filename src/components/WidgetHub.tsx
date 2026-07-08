@@ -34,8 +34,9 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
     const { colors, toggleTheme, theme, colorMode, toggleColorMode } = useTheme();
     const todayKey = getTodayKey();
     const insets = useSafeAreaInsets();
-    // Use local state for options - Reminders ON by default at 8PM
-    const [smartReminders, setSmartReminders] = useState(true);
+    // Reminders default OFF until the user enables them (nothing is scheduled
+    // on a fresh install, so the switch must not claim otherwise).
+    const [smartReminders, setSmartReminders] = useState(false);
     const [reminderHour, setReminderHour] = useState(20); // Default 8 PM
     const [reminderMinute, setReminderMinute] = useState(0);
     const [hapticsEnabled, setHapticsEnabled] = useState(true);

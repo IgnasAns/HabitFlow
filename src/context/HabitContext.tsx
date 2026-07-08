@@ -10,11 +10,14 @@ import {
     TOKEN_EARNING_MILESTONE,
 } from '../utils/engagement';
 import type { BackupSnapshot } from '../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     scheduleHabitReminder,
     cancelHabitReminder,
+    scheduleDailyReminder,
     scheduleStreakDangerNudge,
     cancelStreakDangerNudge,
+    NotificationTranslations,
 } from '../utils/notifications';
 import { useI18n, interpolate } from './I18nContext';
 import { updateWidgetData } from '../utils/widgetData';
@@ -221,6 +224,26 @@ export function HabitProvider({ children }: HabitProviderProps) {
         loadData();
     }, []);
 
+    // Keep the global daily reminder fresh: rescheduling on each app start
+    // (and on language change) rotates the motivational message and applies
+    // the current language — otherwise the message chosen at enable-time
+    // repeats verbatim forever.
+    useEffect(() => {
+        AsyncStorage.getItem('app_settings').then(raw => {
+            if (!raw) return;
+            try {
+                const settings = JSON.parse(raw);
+                if (settings.smartReminders) {
+                    scheduleDailyReminder(
+                        settings.reminderHour ?? 20,
+                        settings.reminderMinute ?? 0,
+                        t.notifications as NotificationTranslations,
+                    );
+                }
+            } catch { /* corrupt settings — skip */ }
+        }).catch(console.error);
+    }, [t]);
+
     const loadData = useCallback(async (): Promise<void> => {
         dispatch({ type: 'SET_LOADING', payload: true });
         let habits = await storage.getHabits();
@@ -341,11 +364,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
         // Milestones from 7 days up also earn a Streak Saver token
         const tokenEarned = !!result.milestone && result.milestone >= TOKEN_EARNING_MILESTONE;
 
-        // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback
+        // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback.
+        // Widgets refresh via the state-change effect below — no direct call
+        // here, or every tap would serialize the widget payload twice.
         dispatch({ type: 'TOGGLE_COMPLETE', payload: { ...result, perfectDay, tokenEarned } });
-
-        // Update widgets immediately with the new habits array
-        updateWidgetData(updatedHabits).catch(console.error);
 
         // Persistence happens via the debounced auto-save effect.
         return result;
@@ -367,11 +389,9 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const perfectDay = !isPerfectDay(currentState.habits) && isPerfectDay(updatedHabits);
         const tokenEarned = !!result.milestone && result.milestone >= TOKEN_EARNING_MILESTONE;
 
-        // OPTIMISTIC UPDATE: Dispatch immediately
+        // OPTIMISTIC UPDATE: Dispatch immediately.
+        // Widgets refresh via the state-change effect (see toggle above).
         dispatch({ type: 'TOGGLE_COMPLETE', payload: { ...result, perfectDay, tokenEarned } });
-
-        // Update widgets immediately with the new habits array
-        updateWidgetData(updatedHabits).catch(console.error);
 
         // Persistence happens via the debounced auto-save effect.
     }, []); // Empty deps - uses stateRef for fresh state

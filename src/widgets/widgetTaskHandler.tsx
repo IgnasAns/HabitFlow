@@ -7,6 +7,7 @@
 import React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { computeToggle } from '../utils/habitLogic';
 import { WeeklyHabitWidget, MonthlyHabitWidget, GitHubHabitWidget, SmallHabitWidget } from './HabitWidgets';
 
 const WIDGET_DATA_KEY = 'HABITFLOW_WIDGET_DATA';
@@ -125,56 +126,9 @@ async function getWidgetHabitId(widgetId: number): Promise<string | null> {
 }
 
 /**
- * Calculate streak using the same algorithm as storage.ts
- * This ensures widget and app streaks stay in sync
- */
-function calculateStreak(completions: Record<string, number>, dailyTarget: number, frequency: string = 'daily'): number {
-    if (!completions) return 0;
-
-    const effectiveTarget = frequency === 'weekly' ? 1 : dailyTarget;
-
-    // Get all completed dates, filter by target, sort in reverse chronological order
-    const completedDates = Object.keys(completions)
-        .filter(k => completions[k] >= effectiveTarget)
-        .sort()
-        .reverse();
-
-    if (completedDates.length === 0) return 0;
-
-    const todayKey = getTodayKey();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
-
-    // Streak can only start from today or yesterday
-    if (completedDates[0] !== todayKey && completedDates[0] !== yesterdayKey) {
-        return 0;
-    }
-
-    let streak = 1;
-    let currentDateParts = completedDates[0].split('-').map(Number);
-    let currentDate = new Date(currentDateParts[0], currentDateParts[1] - 1, currentDateParts[2]);
-
-    for (let i = 1; i < completedDates.length; i++) {
-        const expectedPrevDate = new Date(currentDate);
-        expectedPrevDate.setDate(expectedPrevDate.getDate() - 1);
-        const expectedPrevKey = `${expectedPrevDate.getFullYear()}-${String(expectedPrevDate.getMonth() + 1).padStart(2, '0')}-${String(expectedPrevDate.getDate()).padStart(2, '0')}`;
-
-        if (completedDates[i] === expectedPrevKey) {
-            streak++;
-            currentDate = expectedPrevDate;
-        } else {
-            break;
-        }
-    }
-
-    return streak;
-}
-
-/**
- * Toggle habit completion for today
- * Uses the same three-state cycle as the main app:
- * empty → completed → explicitly failed → empty
+ * Toggle habit completion for today.
+ * Delegates to the shared computeToggle so the three-state cycle AND the
+ * streak math (including Streak Saver frozen days) stay identical to the app.
  */
 async function toggleHabitCompletion(habitId: string): Promise<boolean> {
     try {
@@ -188,35 +142,15 @@ async function toggleHabitCompletion(habitId: string): Promise<boolean> {
         const habitIndex = habits.findIndex((h: any) => h.id === habitId);
         if (habitIndex === -1) return false;
 
-        const habit = habits[habitIndex];
-        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
-        if (!habit.completions) habit.completions = {};
-        if (!habit.explicitFailures) habit.explicitFailures = {};
-
-        const currentProgress = habit.completions[todayKey] || 0;
-        const isExplicitlyFailed = habit.explicitFailures[todayKey] || false;
-        const isCompleted = currentProgress >= effectiveTarget;
-
-        // Three-state cycle: empty → completed → failed → empty
-        if (!isCompleted && !isExplicitlyFailed) {
-            habit.completions[todayKey] = effectiveTarget;
-            delete habit.explicitFailures[todayKey];
-        } else if (isCompleted && !isExplicitlyFailed) {
-            habit.completions[todayKey] = 0;
-            habit.explicitFailures[todayKey] = true;
-        } else {
-            habit.completions[todayKey] = 0;
-            delete habit.explicitFailures[todayKey];
-        }
-
-        habit.streak = calculateStreak(habit.completions, habit.dailyTarget || 1, habit.frequency);
-        habits[habitIndex] = habit;
+        const updated = computeToggle(habits[habitIndex]);
+        habits[habitIndex] = updated;
 
         // Write habits + update widget cache (must await cache so re-render reads fresh data)
         await AsyncStorage.setItem(HABITS_STORAGE_KEY, JSON.stringify(habits));
         await updateWidgetDataCache(habits);
 
-        return (habit.completions[todayKey] || 0) >= effectiveTarget;
+        const effectiveTarget = updated.frequency === 'weekly' ? 1 : (updated.dailyTarget || 1);
+        return (updated.completions[todayKey] || 0) >= effectiveTarget;
     } catch (e) {
         return false;
     }
