@@ -71,17 +71,22 @@ export default function ShareScreen({ navigation }: any) {
         // Leading empty spacers
         for (let i = 0; i < firstDow; i++) cells.push({ bg: 'transparent', isEmpty: true, isFuture: false });
 
+        const createdDate = new Date(habit.createdAt);
+        createdDate.setHours(0, 0, 0, 0);
+
         for (let d = 1; d <= daysInMonth; d++) {
             const dk = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dateObj = new Date(selectedYear, selectedMonth, d);
             const isFuture = dateObj > now && dk !== todayKey;
+            // Days before the habit existed are neutral, not "missed".
+            const isBeforeCreation = dateObj < createdDate;
             const progress = habit.completions[dk] || 0;
             const isExplicitlyFailed = habit.explicitFailures?.[dk] || false;
-            const isMissed = !progress && !isExplicitlyFailed && !isFuture && dk !== todayKey;
+            const isMissed = !progress && !isExplicitlyFailed && !isFuture && !isBeforeCreation && dk !== todayKey;
             const themeColor = colors.habitColors[habit.colorIndex]?.[0] || colors.primaryStart;
 
             let bg = '#252B37';
-            if (isFuture) bg = '#252B37';
+            if (isFuture || isBeforeCreation) bg = '#252B37';
             else if (isExplicitlyFailed) bg = colors.dangerStart;
             else if (progress > 0) bg = themeColor;
             else if (isMissed) bg = 'rgba(255,100,100,0.15)';
@@ -124,7 +129,7 @@ export default function ShareScreen({ navigation }: any) {
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
-                                <Text style={styles.statValue}>{Math.max(0, ...habits.map(h => h.streak))}🔥</Text>
+                                <Text style={styles.statValue}>{Math.max(0, ...habits.map(h => h.streak))}{Math.max(0, ...habits.map(h => h.streak)) > 0 ? '🔥' : ''}</Text>
                                 <Text style={styles.statLabel}>{t.share.bestStreak}</Text>
                             </View>
                             <View style={styles.statDivider} />
@@ -174,7 +179,7 @@ export default function ShareScreen({ navigation }: any) {
                                                 )}
                                             </View>
                                             <View style={styles.cardInfo}>
-                                                <Text style={styles.habitName} numberOfLines={1}>{habit.name}</Text>
+                                                <Text style={styles.habitName} numberOfLines={2}>{habit.name}</Text>
                                                 <Text style={styles.streakText}>
                                                     <Text style={{ color: themeColor, fontWeight: 'bold' }}>{completed}/{total}</Text>
                                                     {' days · '}<Text style={{ color: themeColor, fontWeight: 'bold' }}>{pct}%</Text>
@@ -245,7 +250,8 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
     scrollContent: { flexGrow: 1 },
     capturePadding: {
         padding: spacing.lg,
-        paddingTop: spacing.xl * 3,
+        // Clear the floating month picker / back / share controls above the title.
+        paddingTop: Math.max(insets.top, 20) + spacing.xl * 2,
         paddingBottom: spacing.xl,
     },
     header: { alignItems: 'center', marginBottom: spacing.xl },

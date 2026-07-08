@@ -52,7 +52,7 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction, opacityMultipl
     // Calculate background color directly
     const getBackgroundColor = () => {
         if (day.isExplicitlyFailed) return colors.dangerStart; // Explicit fail - solid red
-        if (day.isInactive) return colors.emptyCell && colors.emptyCell.replace('0.08', '0.04');
+        if (day.isInactive) return colors.emptyCellFaint;
         if (day.isMissed) return colors.dangerStart; // Missed - also solid red (unfilled styling handled by opacity)
 
         // If completed or has progress, use the theme color
@@ -106,7 +106,7 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction, opacityMultipl
                     borderColor: day.isExplicitlyFailed
                         ? colors.dangerStart
                         : day.isToday
-                            ? colors.streakStart // Appealing Gold Highlight
+                            ? themeColor // Highlight "today" in the habit's own colour (consistent app-wide)
                             : 'transparent',
                     justifyContent: 'center',
                     alignItems: 'center',
@@ -366,9 +366,9 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                             <View style={styles.descriptionRow}>
                                 <Text style={styles.description} numberOfLines={1}>
                                     {isWeekly ? (
-                                        `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}🔥`
+                                        `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}${habit.streak > 0 ? '🔥' : ''}`
                                     ) : (
-                                        `${progressToday}/${habit.dailyTarget} today • ${habit.streak}🔥`
+                                        `${progressToday}/${habit.dailyTarget} today • ${habit.streak}${habit.streak > 0 ? '🔥' : ''}`
                                     )}
                                     {habit.timeSlot && ` • ⏰ ${habit.timeSlot.start}-${habit.timeSlot.end}`}
                                 </Text>

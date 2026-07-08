@@ -19,13 +19,20 @@ import { spacing, borderRadius, typography } from '../theme';
 import { triggerSelectionHaptic } from '../utils/feedback';
 import LevelProgress from '../components/LevelProgress';
 import { getDateKey } from '../utils/storage';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CELL_SIZE = (SCREEN_WIDTH - spacing.md * 2 - spacing.xs * 6) / 7;
+// Heatmap cell sizes. We set width AND height explicitly because `aspectRatio`
+// collapses to 0 height inside these flex-wrap grids under the New Architecture.
+const MONTH_CELL_SIZE = (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 6 * 7) / 7;
+const YEAR_CELL_SIZE = (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 3 * 15) / 15;
 
 type TimePeriod = 'week' | 'month' | 'year';
+type StatsScreenProps = NativeStackScreenProps<RootStackParamList, 'Stats'>;
 
-export default function StatsScreen({ navigation }: any) {
+export default function StatsScreen({ navigation }: StatsScreenProps) {
     const { userStats, habits, levelInfo } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
@@ -482,7 +489,7 @@ export default function StatsScreen({ navigation }: any) {
                                     </Text>
                                 </View>
                                 <View style={styles.topHabitStreak}>
-                                    <Text style={styles.topHabitStreakIcon}>🔥</Text>
+                                    {habit.streak > 0 && <Text style={styles.topHabitStreakIcon}>🔥</Text>}
                                     <Text style={styles.topHabitStreakValue}>{habit.streak}</Text>
                                 </View>
                             </View>
@@ -763,10 +770,10 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
         borderRadius: borderRadius.md,
     },
     monthCell: {
-        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 6 * 7) / 7,
-        aspectRatio: 1,
+        width: MONTH_CELL_SIZE,
+        height: MONTH_CELL_SIZE,
         borderRadius: 4,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: colors.emptyCell,
     },
     monthCellToday: {
         borderWidth: 2,
@@ -802,10 +809,10 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
         borderRadius: borderRadius.md,
     },
     yearCell: {
-        width: (SCREEN_WIDTH - spacing.md * 2 - spacing.sm * 2 - 3 * 15) / 15,
-        aspectRatio: 1,
+        width: YEAR_CELL_SIZE,
+        height: YEAR_CELL_SIZE,
         borderRadius: 2,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: colors.emptyCell,
     },
     yearCellToday: {
         borderWidth: 1.5,

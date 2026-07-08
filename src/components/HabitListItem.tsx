@@ -173,9 +173,9 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                     <Text style={styles.name} numberOfLines={1}>{habit.name}</Text>
                     <Text style={styles.meta}>
                         {isWeekly ? (
-                            `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}🔥`
+                            `${weeklyProgress}/${habit.dailyTarget} ${t.common.week.toLowerCase()} • ${habit.streak}${habit.streak > 0 ? '🔥' : ''}`
                         ) : (
-                            `${progressToday}/${habit.dailyTarget} ${t.common.today} • ${habit.streak}🔥`
+                            `${progressToday}/${habit.dailyTarget} ${t.common.today} • ${habit.streak}${habit.streak > 0 ? '🔥' : ''}`
                         )}
                         {habit.timeSlot && ` • ⏰ ${habit.timeSlot.start}-${habit.timeSlot.end}`}
                     </Text>
@@ -312,7 +312,7 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             borderWidth: isToday ? 2 : 0,
-                                            borderColor: isToday ? colors.streakStart : 'transparent'
+                                            borderColor: isToday ? habitThemeColor : 'transparent'
                                         }
                                     ]}
                                 >
