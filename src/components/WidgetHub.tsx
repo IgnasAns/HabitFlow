@@ -268,7 +268,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                 habits,
                 userStats,
                 exportedAt: new Date().toISOString(),
-                appVersion: '2.2.1'
+                appVersion: '2.6.0'
             };
             await Share.share({
                 message: JSON.stringify(data, null, 2),
