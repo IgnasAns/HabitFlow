@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, LayoutAnimation, Platform, UIManager, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
 import { useTheme } from '../context/ThemeContext';
@@ -19,12 +19,15 @@ import { triggerHaptic, triggerSelectionHaptic, triggerNotificationHaptic, updat
 import StyledModal from './StyledModal';
 import ConfirmationModal from './ConfirmationModal';
 import ConfettiOverlay from './ConfettiOverlay';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// Note: LayoutAnimation is a no-op under the New Architecture (Fabric), so we
+// no longer call setLayoutAnimationEnabledExperimental (it only logs a warning).
 
-export default function WidgetHub({ navigation }: any) {
+type WidgetHubProps = NativeStackScreenProps<RootStackParamList, 'WidgetHub'>;
+
+export default function WidgetHub({ navigation }: WidgetHubProps) {
     const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData } = useHabits();
     const { t, language, setLanguage, languageNames, languageFlags, supportedLanguages } = useI18n();
     const { colors, toggleTheme, theme, colorMode, toggleColorMode } = useTheme();
@@ -647,13 +650,6 @@ export default function WidgetHub({ navigation }: any) {
 
                 <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleImport}>
                     <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>{t.settings.importData}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.exportButton, { marginTop: 10, borderColor: colors.primaryStart }]}
-                    onPress={() => navigation?.navigate('WidgetPreview')}
-                >
-                    <Text style={[styles.exportButtonText, { color: colors.primaryStart }]}>🧪 Widget Preview (Dev)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

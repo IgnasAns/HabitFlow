@@ -17,7 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
 import { useI18n } from '../context/I18nContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
 import HabitCard from '../components/HabitCard';
 import HabitListItem from '../components/HabitListItem';
@@ -268,7 +269,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 }
 
 
-const getStyles = (colors: any, insets: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,

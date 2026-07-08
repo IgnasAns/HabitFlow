@@ -1,5 +1,5 @@
 // Theme - Addictive Color Palette & Design Tokens
-import { Platform } from 'react-native';
+import { Platform, ViewStyle } from 'react-native';
 
 export interface ColorGradient {
     readonly 0: string;
@@ -42,6 +42,7 @@ export const colors = {
     glassBorder: 'rgba(255, 255, 255, 0.08)',
     glassHighlight: 'rgba(255, 255, 255, 0.12)',
     emptyCell: 'rgba(255, 255, 255, 0.08)',
+    emptyCellFaint: 'rgba(255, 255, 255, 0.03)',
 
     // Text
     textPrimary: '#FFFFFF',
@@ -123,7 +124,13 @@ export const typography = {
     },
 } as const;
 
-export const shadows = {
+interface Shadows {
+    glow: (color: string) => ViewStyle;
+    card: ViewStyle;
+    button: ViewStyle;
+}
+
+export const shadows: Shadows = {
     glow: (color: string) => Platform.select({
         ios: {
             shadowColor: color,
@@ -137,7 +144,7 @@ export const shadows = {
         web: {
             boxShadow: `0 4px 12px ${color}66`,
         }
-    }),
+    }) as ViewStyle,
     card: Platform.select({
         ios: {
             shadowColor: '#000',
@@ -151,7 +158,7 @@ export const shadows = {
         web: {
             boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
         }
-    }),
+    }) as ViewStyle,
     button: Platform.select({
         ios: {
             shadowColor: '#06B6D4',
@@ -165,8 +172,8 @@ export const shadows = {
         web: {
             boxShadow: '0 4px 8px rgba(6, 182, 212, 0.3)',
         }
-    }),
-} as any;
+    }) as ViewStyle,
+};
 
 // Animation configurations
 export const springConfig = {

@@ -9,6 +9,9 @@ export type ColorMode = 'vivid' | 'pastel';
 // We use the shape of the imported defaultColors
 type ColorsType = typeof defaultColors;
 
+// Public alias for consumers (e.g. getStyles(colors: ThemeColors)).
+export type ThemeColors = ColorsType;
+
 // Define Light Theme colors
 const lightColors: ColorsType = {
     ...defaultColors,
@@ -26,7 +29,9 @@ const lightColors: ColorsType = {
     glass: 'rgba(0, 0, 0, 0.05)',
     glassBorder: 'rgba(0, 0, 0, 0.1)',
     glassHighlight: 'rgba(0, 0, 0, 0.05)',
-    emptyCell: 'rgba(0, 0, 0, 0.08)',
+    // Heatmap cells need stronger contrast on the white card backgrounds.
+    emptyCell: 'rgba(100, 116, 139, 0.24)',
+    emptyCellFaint: 'rgba(100, 116, 139, 0.16)',
 };
 
 interface ThemeContextType {
