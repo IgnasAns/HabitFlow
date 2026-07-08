@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { storage, calculateLevel, calculateHabitTotalXp, getTodayKey, calculateStreak } from '../utils/storage';
+import { storage, calculateLevel, calculateHabitTotalXp } from '../utils/storage';
+import { computeToggle, computeIncrement, buildToggleResult } from '../utils/habitLogic';
 import { scheduleHabitReminder, cancelHabitReminder } from '../utils/notifications';
 import { updateWidgetData } from '../utils/widgetData';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
@@ -160,7 +161,6 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
         // If stored XP mismatches (phantom XP or missing XP), correct it
         if (userStats.totalXp !== realTotalXp) {
-            console.log(`Correcting XP mismatch: Stored ${userStats.totalXp}, Real ${realTotalXp}`);
             userStats = {
                 ...userStats,
                 totalXp: realTotalXp
@@ -237,53 +237,8 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const habit = currentState.habits.find(h => h.id === id);
         if (!habit) return null;
 
-        const targetDateKey = dateKey || getTodayKey();
-        const completions = { ...habit.completions };
-        const explicitFailures = { ...(habit.explicitFailures || {}) };
-
-        // FOR WEEKLY: Max daily target is 1 (completed or not). The "dailyTarget" prop stores the Weekly Goal.
-        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
-
-        const currentCount = completions[targetDateKey] || 0;
-        const isExplicitlyFailed = explicitFailures[targetDateKey] || false;
-        const isCompleted = currentCount >= effectiveTarget;
-
-        // Three-state cycle: empty → completed → explicitly failed → empty
-        if (!isCompleted && !isExplicitlyFailed) {
-            completions[targetDateKey] = effectiveTarget;
-            delete explicitFailures[targetDateKey];
-        } else if (isCompleted && !isExplicitlyFailed) {
-            completions[targetDateKey] = 0;
-            explicitFailures[targetDateKey] = true;
-        } else {
-            completions[targetDateKey] = 0;
-            delete explicitFailures[targetDateKey];
-        }
-
-        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
-        const oldXp = calculateHabitTotalXp(habit);
-
-        const updatedHabit = {
-            ...habit,
-            completions,
-            explicitFailures,
-            streak,
-        };
-
-        const newXp = calculateHabitTotalXp(updatedHabit);
-        const xpGained = newXp - oldXp;
-
-        const currentLevel = calculateLevel(currentState.userStats.totalXp).level;
-        const newTotalXp = Math.max(0, currentState.userStats.totalXp + xpGained);
-        const newLevel = calculateLevel(newTotalXp).level;
-        const leveledUp = newLevel > currentLevel;
-
-        const result: ToggleResult = {
-            habit: updatedHabit,
-            xpGained,
-            leveledUp,
-            newLevel: leveledUp ? newLevel : undefined,
-        };
+        const updatedHabit = computeToggle(habit, dateKey);
+        const result = buildToggleResult(habit, updatedHabit, currentState.userStats.totalXp);
 
         // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback
         dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
@@ -292,9 +247,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
         updateWidgetData(updatedHabits).catch(console.error);
 
-        // Persist via auto-save effect
-        // storage.toggleHabitCompletion(id, dateKey).catch(console.error);
-
+        // Persistence happens via the debounced auto-save effect.
         return result;
     }, []); // Empty deps - uses stateRef for fresh state
 
@@ -306,46 +259,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const habit = currentState.habits.find(h => h.id === id);
         if (!habit) return;
 
-        const targetDateKey = dateKey || getTodayKey();
-        // FOR WEEKLY: Max daily target is 1
-        const effectiveTarget = habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
-        const completions = { ...habit.completions };
+        const updatedHabit = computeIncrement(habit, amount, dateKey);
+        if (!updatedHabit) return; // No-op (already at target)
 
-        const oldProgress = completions[targetDateKey] || 0;
-        if (oldProgress >= effectiveTarget && amount > 0) return;
-
-        const newProgress = Math.min(effectiveTarget, Math.max(0, oldProgress + amount));
-        completions[targetDateKey] = newProgress;
-
-        const explicitFailures = { ...(habit.explicitFailures || {}) };
-        if (newProgress > 0 && explicitFailures[targetDateKey]) {
-            delete explicitFailures[targetDateKey];
-        }
-
-        const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
-        const oldXp = calculateHabitTotalXp(habit);
-
-        const updatedHabit = {
-            ...habit,
-            completions,
-            explicitFailures,
-            streak,
-        };
-
-        const newXp = calculateHabitTotalXp(updatedHabit);
-        const xpGained = newXp - oldXp;
-
-        const currentLevel = calculateLevel(currentState.userStats.totalXp).level;
-        const newTotalXp = Math.max(0, currentState.userStats.totalXp + xpGained);
-        const newLevel = calculateLevel(newTotalXp).level;
-        const leveledUp = newLevel > currentLevel;
-
-        const result: ToggleResult = {
-            habit: updatedHabit,
-            xpGained,
-            leveledUp,
-            newLevel: leveledUp ? newLevel : undefined,
-        };
+        const result = buildToggleResult(habit, updatedHabit, currentState.userStats.totalXp);
 
         // OPTIMISTIC UPDATE: Dispatch immediately
         dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
@@ -354,8 +271,7 @@ export function HabitProvider({ children }: HabitProviderProps) {
         const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
         updateWidgetData(updatedHabits).catch(console.error);
 
-        // Persist via auto-save (debounced)
-        // storage.incrementHabitProgress(id, amount, dateKey).catch(console.error);
+        // Persistence happens via the debounced auto-save effect.
     }, []); // Empty deps - uses stateRef for fresh state
 
     const moveHabit = useCallback(async (fromIndex: number, toIndex: number): Promise<void> => {
