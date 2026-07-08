@@ -11,10 +11,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useHabits } from '../context/HabitContext';
-import { useI18n } from '../context/I18nContext';
-import { useTheme } from '../context/ThemeContext';
+import { useI18n, interpolate } from '../context/I18nContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
+import { computeInsights } from '../utils/engagement';
 import { spacing, borderRadius, typography } from '../theme';
 import { triggerSelectionHaptic } from '../utils/feedback';
 import LevelProgress from '../components/LevelProgress';
@@ -72,6 +74,26 @@ export default function StatsScreen({ navigation }: StatsScreenProps) {
                 return { start: startDate, end: endDate, days: diffDays };
         }
     }, [today]);
+
+    // Lightweight insights (best weekday, week-over-week trend)
+    const insightLines = useMemo(() => {
+        const insights = computeInsights(habits);
+        const dayNames = [t.calendar.sunday, t.calendar.monday, t.calendar.tuesday, t.calendar.wednesday, t.calendar.thursday, t.calendar.friday, t.calendar.saturday];
+        const lines: string[] = [];
+        if (insights.bestWeekday !== null) {
+            lines.push(interpolate(t.engagement.bestDay, { day: dayNames[insights.bestWeekday] }));
+        }
+        if (insights.trendPercent !== null) {
+            if (insights.trendPercent > 0) {
+                lines.push(interpolate(t.engagement.trendUp, { percent: insights.trendPercent }));
+            } else if (insights.trendPercent < 0) {
+                lines.push(interpolate(t.engagement.trendDown, { percent: Math.abs(insights.trendPercent) }));
+            } else {
+                lines.push(t.engagement.trendFlat);
+            }
+        }
+        return lines;
+    }, [habits, t]);
 
     // Calculate detailed stats for selected period
     const periodStats = useMemo(() => {
@@ -324,6 +346,16 @@ export default function StatsScreen({ navigation }: StatsScreenProps) {
                 </View>
             </Animated.View>
 
+            {/* Insight */}
+            {insightLines.length > 0 && (
+                <Animated.View entering={FadeInDown.delay(380)} style={styles.insightCard}>
+                    <Text style={styles.insightTitle}>💡 {t.engagement.insight}</Text>
+                    {insightLines.map((line, i) => (
+                        <Text key={i} style={styles.insightText}>{line}</Text>
+                    ))}
+                </Animated.View>
+            )}
+
             {/* Weekly Overview (visible for week period) */}
             {selectedPeriod === 'week' && (
                 <Animated.View
@@ -518,7 +550,7 @@ export default function StatsScreen({ navigation }: StatsScreenProps) {
     );
 }
 
-const getStyles = (colors: any, insets: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -736,6 +768,26 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
         padding: spacing.md,
         borderWidth: 1,
         borderColor: colors.glassBorder,
+    },
+    insightCard: {
+        marginTop: spacing.md,
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+    },
+    insightTitle: {
+        ...typography.small,
+        color: colors.textMuted,
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: spacing.xs,
+    },
+    insightText: {
+        ...typography.body,
+        color: colors.textPrimary,
+        marginTop: 2,
     },
     periodStatsGrid: {
         flexDirection: 'row',

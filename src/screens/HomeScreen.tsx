@@ -16,13 +16,16 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useHabits } from '../context/HabitContext';
-import { useI18n } from '../context/I18nContext';
+import { useI18n, interpolate } from '../context/I18nContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
+import { getTodayKey } from '../utils/calculations';
 import HabitCard from '../components/HabitCard';
 import HabitListItem from '../components/HabitListItem';
 import ConfettiOverlay from '../components/ConfettiOverlay';
+import CelebrationModal, { CelebrationType } from '../components/CelebrationModal';
+import StyledModal from '../components/StyledModal';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -31,6 +34,20 @@ import { Habit } from '../types';
 
 type ViewMode = 'card' | 'list' | 'monthly';
 const VIEW_MODE_KEY = '@view_mode';
+const PERFECT_DAY_CELEBRATED_KEY = '@perfect_day_celebrated';
+
+const VIEW_MODES: { mode: ViewMode; icon: 'grid-outline' | 'list-outline' | 'calendar-outline' }[] = [
+    { mode: 'card', icon: 'grid-outline' },
+    { mode: 'list', icon: 'list-outline' },
+    { mode: 'monthly', icon: 'calendar-outline' },
+];
+
+interface Celebration {
+    type: CelebrationType;
+    title: string;
+    subtitle: string;
+    badge?: string;
+}
 
 interface HomeScreenProps {
     navigation: NativeStackNavigationProp<any>;
@@ -46,6 +63,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         clearLastAction,
         refreshData,
         reorderHabits,
+        streakSaverNotice,
+        clearStreakSaverNotice,
     } = useHabits();
     const { t } = useI18n();
     const { colors } = useTheme();
@@ -56,6 +75,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     const [confettiType, setConfettiType] = useState<'completion' | 'levelUp' | 'streak'>('completion');
     const [refreshing, setRefreshing] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [celebration, setCelebration] = useState<Celebration | null>(null);
+
+    // Archived habits stay out of sight; only active ones are listed.
+    const visibleHabits = useMemo(() => habits.filter(h => !h.archived), [habits]);
 
     // Load view mode preference on mount
     useEffect(() => {
@@ -66,14 +89,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         });
     }, []);
 
-    // Toggle view mode - haptic FIRST for immediate feedback
-    const toggleViewMode = useCallback(() => {
-        // Immediate haptic feedback
+    // Select view mode - haptic FIRST for immediate feedback
+    const selectViewMode = useCallback((newMode: ViewMode) => {
+        if (newMode === viewMode) return;
         triggerHaptic();
-
-        let newMode: ViewMode = 'list';
-        if (viewMode === 'list') newMode = 'monthly';
-        else if (viewMode === 'monthly') newMode = 'card';
 
         // Immediate UI update - no animation for instant response
         setViewMode(newMode);
@@ -97,13 +116,46 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         navigation.navigate('HabitDetail', { habitId: id });
     }, [navigation]);
 
-    // Handle last action (show confetti, etc.)
+    // Handle last action: confetti plus a full celebration (with share prompt)
+    // for the moments that matter — milestones, level-ups, perfect days.
     useEffect(() => {
         if (lastAction?.type === 'TOGGLE_COMPLETE' && lastAction.xpGained && lastAction.xpGained > 0) {
-            if (lastAction.leveledUp) {
+            const habitName = lastAction.habit?.name ?? '';
+            if (lastAction.milestone) {
+                setConfettiType('streak');
+                setShowConfetti(true);
+                triggerNotificationHaptic(FeedbackType.Success);
+                setCelebration({
+                    type: 'milestone',
+                    title: interpolate(t.engagement.milestoneTitle, { count: lastAction.milestone }),
+                    subtitle: interpolate(t.engagement.milestoneSubtitle, { name: habitName }),
+                    badge: lastAction.tokenEarned ? t.engagement.tokenEarned : undefined,
+                });
+            } else if (lastAction.leveledUp) {
                 setConfettiType('levelUp');
                 setShowConfetti(true);
                 triggerNotificationHaptic(FeedbackType.Success);
+                setCelebration({
+                    type: 'levelUp',
+                    title: interpolate(t.engagement.levelUpTitle, { level: lastAction.newLevel ?? 0 }),
+                    subtitle: t.engagement.levelUpSubtitle,
+                });
+            } else if (lastAction.perfectDay) {
+                // Celebrate a perfect day at most once per day
+                AsyncStorage.getItem(PERFECT_DAY_CELEBRATED_KEY).then(celebrated => {
+                    const today = getTodayKey();
+                    if (celebrated !== today) {
+                        AsyncStorage.setItem(PERFECT_DAY_CELEBRATED_KEY, today);
+                        setConfettiType('completion');
+                        setShowConfetti(true);
+                        triggerNotificationHaptic(FeedbackType.Success);
+                        setCelebration({
+                            type: 'perfectDay',
+                            title: t.engagement.perfectDayTitle,
+                            subtitle: t.engagement.perfectDaySubtitle,
+                        });
+                    }
+                });
             } else if (lastAction.habit?.streak && lastAction.habit.streak > 0 && lastAction.habit.streak % 7 === 0) {
                 setConfettiType('streak');
                 setShowConfetti(true);
@@ -151,8 +203,30 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         );
     }, [handleToggle, handleIncrement, handleEdit, viewMode]);
 
-    // Header spacer for list
-    const headerComponent = useMemo(() => <View style={{ height: 10 }} />, []);
+    // Header row: segmented view-mode control (replaces the old cycling icon,
+    // which was impossible to discover).
+    const headerComponent = useMemo(() => (
+        <View style={styles.viewModeRow}>
+            <View style={styles.segmented}>
+                {VIEW_MODES.map(({ mode, icon }) => (
+                    <Pressable
+                        key={mode}
+                        style={[styles.segment, viewMode === mode && styles.segmentActive]}
+                        onPress={() => selectViewMode(mode)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: viewMode === mode }}
+                        accessibilityLabel={`${mode} view`}
+                    >
+                        <Ionicons
+                            name={icon}
+                            size={16}
+                            color={viewMode === mode ? colors.textPrimary : colors.textMuted}
+                        />
+                    </Pressable>
+                ))}
+            </View>
+        </View>
+    ), [viewMode, selectViewMode, styles, colors]);
 
     // Memoize empty state
     const emptyComponent = useMemo(() => (
@@ -199,10 +273,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                     onComplete={() => setShowConfetti(false)}
                 />
 
+                <CelebrationModal
+                    visible={!!celebration}
+                    type={celebration?.type ?? 'milestone'}
+                    title={celebration?.title ?? ''}
+                    subtitle={celebration?.subtitle ?? ''}
+                    badge={celebration?.badge}
+                    shareLabel={t.engagement.shareIt}
+                    dismissLabel={t.engagement.keepGoing}
+                    onShare={() => {
+                        setCelebration(null);
+                        navigation.navigate('Share');
+                    }}
+                    onDismiss={() => setCelebration(null)}
+                />
+
+                <StyledModal
+                    visible={!!streakSaverNotice}
+                    emoji="🧊"
+                    title={t.engagement.streakSaverUsedTitle}
+                    message={(streakSaverNotice ?? [])
+                        .map(s => interpolate(t.engagement.streakSaverUsedBody, { name: s.habitName, streak: s.streak }))
+                        .join('\n')}
+                    buttonText={t.common.okay}
+                    onClose={clearStreakSaverNotice}
+                />
+
                 {/* Top Navigation Bar - Fixed at top */}
                 <View style={styles.topBar}>
                     <View>
-                        <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('WidgetHub')}>
+                        <Pressable
+                            style={styles.iconBtn}
+                            onPress={() => navigation.navigate('WidgetHub')}
+                            accessibilityRole="button"
+                            accessibilityLabel={t.nav.settings}
+                        >
                             <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
                         </Pressable>
                     </View>
@@ -211,26 +316,32 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
                     <View style={styles.topRight}>
                         <View>
-                            <Pressable style={styles.iconBtn} onPress={toggleViewMode}>
-                                <Ionicons
-                                    name={viewMode === 'list' ? 'calendar-outline' : viewMode === 'monthly' ? 'grid-outline' : 'list-outline'}
-                                    size={22}
-                                    color={colors.textPrimary}
-                                />
-                            </Pressable>
-                        </View>
-                        <View>
-                            <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Share')}>
+                            <Pressable
+                                style={styles.iconBtn}
+                                onPress={() => navigation.navigate('Share')}
+                                accessibilityRole="button"
+                                accessibilityLabel={t.nav.share}
+                            >
                                 <Ionicons name="share-social-outline" size={24} color={colors.textPrimary} />
                             </Pressable>
                         </View>
                         <View>
-                            <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Stats')}>
+                            <Pressable
+                                style={styles.iconBtn}
+                                onPress={() => navigation.navigate('Stats')}
+                                accessibilityRole="button"
+                                accessibilityLabel={t.nav.stats}
+                            >
                                 <Ionicons name="stats-chart" size={22} color={colors.textPrimary} />
                             </Pressable>
                         </View>
                         <View>
-                            <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('AddHabit')}>
+                            <Pressable
+                                style={styles.iconBtn}
+                                onPress={() => navigation.navigate('AddHabit')}
+                                accessibilityRole="button"
+                                accessibilityLabel={t.nav.addHabit}
+                            >
                                 <Ionicons name="add" size={30} color={colors.textPrimary} />
                             </Pressable>
                         </View>
@@ -240,9 +351,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 {/* Draggable List */}
                 <DraggableFlatList
                     containerStyle={{ flex: 1 }}
-                    data={habits}
+                    data={visibleHabits}
                     extraData={viewMode}
-                    onDragEnd={({ data }) => reorderHabits(data)}
+                    onDragEnd={({ data }) => {
+                        // The list only shows active habits; keep archived ones
+                        // (in their original order) at the end of the stored array.
+                        const archived = habits.filter(h => h.archived);
+                        reorderHabits([...data, ...archived]);
+                    }}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     contentContainerStyle={styles.scrollContent}
@@ -308,6 +424,32 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    viewModeRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        marginBottom: spacing.sm,
+    },
+    segmented: {
+        flexDirection: 'row',
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        padding: 3,
+        gap: 2,
+    },
+    segment: {
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        borderRadius: borderRadius.md - 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    segmentActive: {
+        backgroundColor: colors.glassHighlight,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
     },
     emptyState: {
         alignItems: 'center',

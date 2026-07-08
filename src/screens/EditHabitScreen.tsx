@@ -94,11 +94,26 @@ export default function EditHabitScreen({ route, navigation }: EditHabitScreenPr
                             {t.habit.dangerZone}
                         </Text>
                         <Pressable
+                            style={({ pressed }) => [styles.archiveButton, pressed && { opacity: 0.7 }]}
+                            onPress={async () => {
+                                triggerHaptic(ImpactStyle.Medium);
+                                await updateHabit(habitId, { archived: true });
+                                navigation.navigate('Home');
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={t.engagement.archiveHabit}
+                        >
+                            <Text style={styles.archiveButtonText}>📦 {t.engagement.archiveHabit}</Text>
+                            <Text style={styles.archiveButtonHint}>{t.engagement.archiveHint}</Text>
+                        </Pressable>
+                        <Pressable
                             style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.7 }]}
                             onPress={() => {
                                 triggerHaptic(ImpactStyle.Medium);
                                 setShowDeleteModal(true);
                             }}
+                            accessibilityRole="button"
+                            accessibilityLabel={t.habit.deleteHabit}
                         >
                             <Text style={styles.deleteButtonText}>{t.habit.deleteHabit}</Text>
                         </Pressable>
@@ -149,6 +164,24 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
         letterSpacing: 1,
         fontSize: 12,
         marginBottom: spacing.sm,
+    },
+    archiveButton: {
+        padding: spacing.md,
+        backgroundColor: colors.glass,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        alignItems: 'center',
+        marginBottom: spacing.sm,
+    },
+    archiveButtonText: {
+        ...typography.bodyBold,
+        color: colors.textPrimary,
+    },
+    archiveButtonHint: {
+        ...typography.caption,
+        color: colors.textMuted,
+        marginTop: 2,
     },
     deleteButton: {
         padding: spacing.md,

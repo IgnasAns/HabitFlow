@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius, typography } from '../theme';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
 import { SupportedLanguage } from '../i18n';
@@ -28,7 +29,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 type WidgetHubProps = NativeStackScreenProps<RootStackParamList, 'WidgetHub'>;
 
 export default function WidgetHub({ navigation }: WidgetHubProps) {
-    const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData } = useHabits();
+    const { habits, userStats, levelInfo, lastAction, clearLastAction, resetApp, importData, updateHabit, listBackups, restoreBackup } = useHabits();
     const { t, language, setLanguage, languageNames, languageFlags, supportedLanguages } = useI18n();
     const { colors, toggleTheme, theme, colorMode, toggleColorMode } = useTheme();
     const todayKey = getTodayKey();
@@ -194,6 +195,9 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
     // Language picker state
     const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
+    // Auto-backup restore state
+    const [pendingRestore, setPendingRestore] = useState<import('../utils/storage').BackupSnapshot | null>(null);
+
     // Confetti state
     const [showConfetti, setShowConfetti] = useState(false);
     const [confettiType, setConfettiType] = useState<'completion' | 'levelUp' | 'streak'>('completion');
@@ -209,8 +213,21 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
         return t.quotes[quoteKey];
     }, [t, quoteIndex]);
 
+    const handleRestoreBackup = async () => {
+        triggerSelectionHaptic();
+        const backups = await listBackups();
+        if (backups.length === 0) {
+            showInfo(t.engagement.restoreBackup, t.engagement.noBackups, '🗂️');
+            return;
+        }
+        // Newest snapshot first (createBackupNow keeps them in that order)
+        setPendingRestore(backups[0]);
+    };
+
     // Calculate stats
     const activeHabits = habits.filter(h => !h.archived);
+    const archivedHabits = habits.filter(h => h.archived);
+    const freezeTokens = userStats.freezeTokens ?? 0;
     const completedToday = activeHabits.filter(h => (h.completions[todayKey] || 0) >= h.dailyTarget).length;
     const totalHabits = activeHabits.length;
     const completionRate = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
@@ -307,10 +324,19 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                     <Text style={styles.statBigValue}>{consistencyScore}%</Text>
                     <Text style={styles.statBigLabel}>{t.settings.consistencyScore} ({t.settings.last30Days})</Text>
                 </View>
+
+                {/* Streak Saver tokens */}
+                <View style={styles.tokenRow}>
+                    <Text style={styles.tokenCount}>🧊 ×{freezeTokens}</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.settingLabel}>{t.engagement.streakSavers}</Text>
+                        <Text style={styles.settingDesc}>{t.engagement.streakSaversDesc}</Text>
+                    </View>
+                </View>
             </View>
 
         </View>
-    ), [consistencyScore, t, styles, navigation, colors]);
+    ), [consistencyScore, freezeTokens, t, styles, navigation, colors]);
 
     const renderFooter = useCallback(() => (
         <View>
@@ -640,6 +666,30 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                 </View>
             </View>
 
+            {/* Archived Habits */}
+            {archivedHabits.length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>{t.engagement.archivedHabits.toUpperCase()}</Text>
+                    {archivedHabits.map(habit => (
+                        <View key={habit.id} style={styles.archivedRow}>
+                            <Text style={styles.archivedIcon}>{habit.icon}</Text>
+                            <Text style={styles.archivedName} numberOfLines={1}>{habit.name}</Text>
+                            <Pressable
+                                style={({ pressed }) => [styles.restoreButton, pressed && { opacity: 0.7 }]}
+                                onPress={() => {
+                                    triggerHaptic(ImpactStyle.Light);
+                                    updateHabit(habit.id, { archived: false });
+                                }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${t.engagement.restore} ${habit.name}`}
+                            >
+                                <Text style={styles.restoreButtonText}>{t.engagement.restore}</Text>
+                            </Pressable>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             {/* Data Export & Reset */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>{t.settings.dataPrivacy}</Text>
@@ -650,6 +700,11 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
 
                 <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleImport}>
                     <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>{t.settings.importData}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.exportButton, { marginTop: 10, borderColor: colors.textMuted }]} onPress={handleRestoreBackup}>
+                    <Text style={[styles.exportButtonText, { color: colors.textMuted }]}>{t.engagement.restoreBackup}</Text>
+                    <Text style={[styles.settingDesc, { marginTop: 2 }]}>{t.engagement.restoreBackupDesc}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -665,7 +720,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
             </View>
             <View style={{ height: 80 }} />
         </View>
-    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, reminderHour, reminderMinute, showTimePicker, updateReminderTime, hapticsEnabled, soundEnabled, theme, colorMode, customMode, localHour, localMinute]);
+    ), [randomQuote, t, language, supportedLanguages, languageFlags, languageNames, setLanguage, styles, colors, smartReminders, reminderHour, reminderMinute, showTimePicker, updateReminderTime, hapticsEnabled, soundEnabled, theme, colorMode, customMode, localHour, localMinute, archivedHabits, updateHabit, listBackups]);
 
     return (
         <GestureHandlerRootView style={styles.container}>
@@ -706,6 +761,37 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
             />
 
             <ConfirmationModal
+                visible={!!pendingRestore}
+                title={t.engagement.restoreConfirmTitle}
+                message={interpolate(t.engagement.restoreConfirmMessage, {
+                    date: pendingRestore ? new Date(pendingRestore.savedAt).toLocaleDateString() : '',
+                })}
+                confirmLabel={t.engagement.restore}
+                cancelLabel={t.common.cancel}
+                type="danger"
+                onConfirm={async () => {
+                    const snapshot = pendingRestore;
+                    setPendingRestore(null);
+                    if (!snapshot) return;
+                    const ok = await restoreBackup(snapshot);
+                    if (ok) {
+                        triggerNotificationHaptic(FeedbackType.Success);
+                        showInfo(
+                            t.engagement.backupRestored,
+                            interpolate(t.engagement.backupRestoredDesc, {
+                                date: new Date(snapshot.savedAt).toLocaleDateString(),
+                            }),
+                            '🗂️'
+                        );
+                    } else {
+                        triggerNotificationHaptic(FeedbackType.Error);
+                        showInfo(t.settings.importFailed, t.settings.importFailedDesc, '⚠️');
+                    }
+                }}
+                onCancel={() => setPendingRestore(null)}
+            />
+
+            <ConfirmationModal
                 visible={showResetModal}
                 title={t.stats.resetData}
                 message={t.stats.resetWarning}
@@ -723,7 +809,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
     );
 }
 
-const getStyles = (colors: any, insets: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bgDark,
@@ -862,5 +948,47 @@ const getStyles = (colors: any, insets: any) => StyleSheet.create({
         ...typography.caption,
         color: colors.textMuted,
         marginTop: 2,
+    },
+    tokenRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.md,
+        padding: spacing.md,
+        marginTop: spacing.sm,
+    },
+    tokenCount: {
+        ...typography.h3,
+        color: colors.textPrimary,
+    },
+    archivedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.md,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+    },
+    archivedIcon: {
+        fontSize: 20,
+    },
+    archivedName: {
+        ...typography.body,
+        color: colors.textSecondary,
+        flex: 1,
+    },
+    restoreButton: {
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.md,
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: colors.primaryStart,
+    },
+    restoreButtonText: {
+        ...typography.caption,
+        color: colors.primaryStart,
+        fontWeight: '700',
     },
 });
