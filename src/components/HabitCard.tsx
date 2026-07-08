@@ -19,7 +19,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, typography, shadows } from '../theme';
+import { spacing, typography, shadows, pickTextOn } from '../theme';
 import { getTodayKey, generateGridData } from '../utils/storage';
 import { Habit, GridDay } from '../types';
 import { triggerHaptic, triggerSelectionHaptic } from '../utils/feedback';
@@ -119,14 +119,14 @@ const SimpleGridSquare = memo(({ day, size, themeColor, onAction, opacityMultipl
                 <Ionicons
                     name="close"
                     size={Math.max(8, size * 0.55)}
-                    color="#fff"
+                    color={pickTextOn(colors.dangerStart)}
                 />
             )}
             {isCompleted && (
                 <Ionicons
                     name="checkmark"
                     size={Math.max(6, size * 0.5)}
-                    color="#fff"
+                    color={pickTextOn(themeColor)}
                 />
             )}
         </Pressable>
@@ -448,9 +448,9 @@ const HabitCard = ({ habit, onToggle, onIncrement, onPress, drag, isActive }: Ha
                             >
                                 {!isCompletedToday && !isExplicitlyFailedToday && <Animated.View style={progressStyle} />}
                                 {isCompletedToday ? (
-                                    <Ionicons name="checkmark" size={20} color="#fff" style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
+                                    <Ionicons name="checkmark" size={20} color={pickTextOn(habitThemeColor)} style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
                                 ) : isExplicitlyFailedToday ? (
-                                    <Ionicons name="close" size={20} color="#fff" style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
+                                    <Ionicons name="close" size={20} color={pickTextOn(colors.dangerStart)} style={{ backgroundColor: 'transparent', textShadowColor: 'transparent' }} />
                                 ) : habit.dailyTarget > 1 ? (
                                     <Text style={[styles.progressCount, { color: habitThemeColor }]}>
                                         {progressToday}

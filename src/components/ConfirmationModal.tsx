@@ -13,7 +13,7 @@ import Animated, {
     FadeOut,
 } from 'react-native-reanimated';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography, shadows } from '../theme';
+import { spacing, borderRadius, typography, shadows, pickTextOn } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ConfirmationModalProps {
@@ -97,7 +97,7 @@ export default function ConfirmationModal({
                                     end={{ x: 1, y: 1 }}
                                     style={styles.gradient}
                                 >
-                                    <Text style={styles.confirmText}>{confirmLabel}</Text>
+                                    <Text style={[styles.confirmText, { color: pickTextOn(confirmColors[0]) }]}>{confirmLabel}</Text>
                                 </LinearGradient>
                             </Pressable>
                         </View>

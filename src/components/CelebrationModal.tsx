@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { ZoomIn, FadeIn, FadeOut } from 'react-native-reanimated';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { triggerSelectionHaptic } from '../utils/feedback';
 
 export type CelebrationType = 'milestone' | 'levelUp' | 'perfectDay';
@@ -98,7 +98,7 @@ export default function CelebrationModal({
                                 accessibilityLabel={shareLabel}
                             >
                                 <LinearGradient colors={accent} style={styles.shareGradient}>
-                                    <Text style={styles.shareText}>{shareLabel}  📤</Text>
+                                    <Text style={[styles.shareText, { color: pickTextOn(accent[0]) }]}>{shareLabel}  📤</Text>
                                 </LinearGradient>
                             </Pressable>
 

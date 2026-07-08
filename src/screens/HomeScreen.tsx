@@ -19,7 +19,7 @@ import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
 import type { EdgeInsets } from 'react-native-safe-area-context';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { getTodayKey } from '../utils/calculations';
 import HabitCard from '../components/HabitCard';
 import HabitListItem from '../components/HabitListItem';
@@ -485,6 +485,7 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
     },
     emptyButtonText: {
         ...typography.bodyBold,
-        color: colors.textPrimary,
+        // Sits on the primary gradient, which goes near-white in pastel mode
+        color: pickTextOn(colors.primaryStart),
     },
 });

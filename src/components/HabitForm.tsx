@@ -23,7 +23,7 @@ import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
 import { triggerSelectionHaptic, triggerNotificationHaptic, FeedbackType } from '../utils/feedback';
 import { useI18n } from '../context/I18nContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography, habitIcons } from '../theme';
+import { spacing, borderRadius, typography, habitIcons, pickTextOn } from '../theme';
 import { getLastGrapheme } from '../utils/text';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -555,7 +555,7 @@ export default function HabitForm({
                         end={{ x: 1, y: 0 }}
                         style={styles.saveButtonGradient}
                     >
-                        <Text style={[styles.saveButtonText, isValid && { color: '#fff' }]}>{submitLabel}</Text>
+                        <Text style={[styles.saveButtonText, isValid && { color: pickTextOn(saveGradient[0]) }]}>{submitLabel}</Text>
                     </LinearGradient>
                 </AnimatedPressable>
             </View>
@@ -725,7 +725,7 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
         color: colors.textSecondary,
     },
     presetTextActive: {
-        color: '#fff',
+        color: pickTextOn(colors.primaryStart),
         fontWeight: '700',
     },
     customInputContainer: {
@@ -767,7 +767,7 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
         justifyContent: 'center',
     },
     setButtonText: {
-        color: '#fff',
+        color: pickTextOn(colors.primaryStart),
         fontWeight: '700',
     },
     reminderRow: {

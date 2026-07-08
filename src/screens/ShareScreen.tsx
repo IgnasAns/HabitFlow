@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, typography, borderRadius, shadows } from '../theme';
+import { spacing, typography, borderRadius, shadows, pickTextOn } from '../theme';
 import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
 import { getTodayKey, generateGridData } from '../utils/storage';
@@ -240,7 +240,7 @@ export default function ShareScreen({ navigation }: any) {
 
             {/* Share Button */}
             <Pressable style={styles.shareButton} onPress={handleShare}>
-                <Ionicons name="share-social" size={24} color="#fff" />
+                <Ionicons name="share-social" size={24} color={pickTextOn(colors.primaryStart)} />
             </Pressable>
         </View>
     );

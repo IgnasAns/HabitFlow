@@ -48,6 +48,9 @@ export const colors = {
     textPrimary: '#FFFFFF',
     textSecondary: '#94A3B8',
     textMuted: '#64748B',
+    // Accent used AS TEXT (numbers, links, active labels). Unlike `primary`,
+    // this must never go pastel — pastel-on-white text is unreadable.
+    accentText: '#06B6D4',
 
     // Habit colors palette
     habitColors: [
@@ -72,6 +75,22 @@ export const colors = {
         ['#ECFCCB', '#D9F99D'], // Lime
         ['#E0F2FE', '#BAE6FD'], // Sky
     ] as [string, string][],
+};
+
+/**
+ * Pick a readable text color for content sitting on `bgHex`.
+ * Vivid accents are mid-luminance so white works; pastels are near-white and
+ * need dark text (white-on-pastel measures ~1.2:1 — invisible).
+ */
+export const pickTextOn = (bgHex: string): string => {
+    const h = bgHex.replace('#', '');
+    if (h.length < 6) return '#FFFFFF';
+    const channel = (i: number) => {
+        let v = parseInt(h.slice(i, i + 2), 16) / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+    return luminance > 0.45 ? '#0F172A' : '#FFFFFF';
 };
 
 export const spacing = {

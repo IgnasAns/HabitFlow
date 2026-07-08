@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { triggerSelectionHaptic } from '../utils/feedback';
 
 interface StyledModalProps {
@@ -165,6 +165,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     },
     buttonText: {
         ...typography.bodyBold,
-        color: colors.textPrimary,
+        // Sits on the primary gradient, which goes near-white in pastel mode
+        color: pickTextOn(colors.primaryStart),
     },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { Habit } from '../types';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
@@ -86,9 +86,9 @@ export default function HabitCalendar({ habit, onToggle }: HabitCalendarProps) {
                             isFuture && { opacity: 0.3 }
                         ]}>
                             {isCompleted ? (
-                                <Text style={styles.checkMark}>✓</Text>
+                                <Text style={[styles.checkMark, { color: pickTextOn(themeColor) }]}>✓</Text>
                             ) : isExplicitlyFailed ? (
-                                <Text style={styles.checkMark}>✕</Text>
+                                <Text style={[styles.checkMark, { color: pickTextOn(colors.dangerStart) }]}>✕</Text>
                             ) : (
                                 <Text style={[styles.dayText, isToday && { color: themeColor, fontWeight: 'bold' }]}>
                                     {dayNum}

@@ -23,7 +23,11 @@ const lightColors: ColorsType = {
     // Text
     textPrimary: '#0F172A',
     textSecondary: '#475569',
-    textMuted: '#94A3B8',
+    // #94A3B8 measured 2.56:1 on the white cards — unreadable captions.
+    textMuted: '#64748B',
+    // Darker cyan so accent-colored text stays legible on white (4.0:1 vs
+    // 2.4:1 for the default #06B6D4).
+    accentText: '#0891B2',
 
     // Glass effect
     glass: 'rgba(0, 0, 0, 0.05)',
@@ -58,6 +62,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (m === 'pastel') {
             return {
                 ...baseColors,
+                // Note: accentText deliberately NOT overridden — pastel softens
+                // fills and gradients, but pastel-colored *text* is unreadable.
                 primary: baseColors.pastelHabitColors[0],
                 primaryStart: baseColors.pastelHabitColors[0][0],
                 primaryEnd: baseColors.pastelHabitColors[0][1],

@@ -17,7 +17,7 @@ import { triggerHaptic, ImpactStyle } from '../utils/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { useI18n } from '../context/I18nContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { getTodayKey, generateGridData, generateCalendarMonthData, parseDateKey } from '../utils/storage';
 import { Habit } from '../types';
 
@@ -237,9 +237,9 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                             accessibilityState={{ checked: isCompletedToday }}
                         >
                             {isCompletedToday ? (
-                                <Text style={styles.checkMark}>✓</Text>
+                                <Text style={[styles.checkMark, { color: pickTextOn(habitThemeColor) }]}>✓</Text>
                             ) : isExplicitlyFailedToday ? (
-                                <Text style={styles.checkMark}>×</Text>
+                                <Text style={[styles.checkMark, { color: pickTextOn(colors.dangerStart) }]}>×</Text>
                             ) : habit.dailyTarget > 1 && !isWeekly && progressToday > 0 ? (
                                 <Text style={{ color: habitThemeColor, fontSize: 13, fontWeight: '800' }}>{progressToday}</Text>
                             ) : (
@@ -320,10 +320,10 @@ const HabitListItem = ({ habit, onToggle, onIncrement, onPress, drag, isActive, 
                                     ]}
                                 >
                                     {/* Icons */}
-                                    {isFailed && <Ionicons name="close" size={cellSize * 0.7} color="#fff" />}
-                                    {isCompleted && <Ionicons name="checkmark" size={cellSize * 0.7} color="#fff" />}
+                                    {isFailed && <Ionicons name="close" size={cellSize * 0.7} color={pickTextOn(colors.dangerStart)} />}
+                                    {isCompleted && <Ionicons name="checkmark" size={cellSize * 0.7} color={pickTextOn(habitThemeColor)} />}
                                     {!isCompleted && !isFailed && hasProgress && (
-                                        <Text style={{ fontSize: cellSize * 0.5, color: '#fff', fontWeight: 'bold' }}>{day.progress}</Text>
+                                        <Text style={{ fontSize: cellSize * 0.5, color: pickTextOn(habitThemeColor), fontWeight: 'bold' }}>{day.progress}</Text>
                                     )}
                                 </View>
                                 {!isMonthly && (

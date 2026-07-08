@@ -2,7 +2,7 @@ import React, { useMemo, memo } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, pickTextOn } from '../theme';
 import { getDateKey } from '../utils/storage';
 import { useI18n, interpolate } from '../context/I18nContext';
 
@@ -65,7 +65,7 @@ const CircleDay = memo(({
                         day.isToday && styles.circleToday,
                     ]}
                 >
-                    {day.isCompleted && <Text style={styles.checkmark}>✓</Text>}
+                    {day.isCompleted && <Text style={[styles.checkmark, { color: pickTextOn(gradientColors[0]) }]}>✓</Text>}
                 </LinearGradient>
             ) : (
                 <View

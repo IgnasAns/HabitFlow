@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TouchableOpacity, ScrollView, Alert, Share, Switch, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { EdgeInsets } from 'react-native-safe-area-context';
-import { spacing, borderRadius, typography } from '../theme';
+import { spacing, borderRadius, typography, pickTextOn } from '../theme';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { useHabits } from '../context/HabitContext';
 import { useI18n, interpolate } from '../context/I18nContext';
@@ -385,7 +385,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                                 <Text style={styles.settingDesc}>{t.settings.reminderTimeDesc}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <Text style={{ ...typography.bodyBold, color: colors.primaryStart, fontSize: 18 }}>
+                                <Text style={{ ...typography.bodyBold, color: colors.accentText, fontSize: 18 }}>
                                     {reminderHour.toString().padStart(2, '0')}:{reminderMinute.toString().padStart(2, '0')}
                                 </Text>
                                 <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
@@ -446,7 +446,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                                                         >
                                                             <Text style={{
                                                                 ...typography.small,
-                                                                color: isSelected ? '#fff' : colors.textSecondary,
+                                                                color: isSelected ? pickTextOn(colors.primaryStart) : colors.textSecondary,
                                                                 fontWeight: isSelected ? '700' : '400'
                                                             }}>
                                                                 {time.label}
@@ -481,7 +481,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                                                 >
                                                     <Text style={{
                                                         ...typography.small,
-                                                        color: showCustomInput ? '#fff' : colors.textSecondary,
+                                                        color: showCustomInput ? pickTextOn(colors.primaryStart) : colors.textSecondary,
                                                         fontWeight: showCustomInput ? '700' : '400'
                                                     }}>
                                                         CUSTOM
@@ -561,7 +561,7 @@ export default function WidgetHub({ navigation }: WidgetHubProps) {
                                                             updateReminderTime(Math.min(23, Math.max(0, h)), Math.min(59, Math.max(0, m)));
                                                         }}
                                                     >
-                                                        <Text style={{ color: '#fff', fontWeight: '700' }}>SET</Text>
+                                                        <Text style={{ color: pickTextOn(colors.primaryStart), fontWeight: '700' }}>SET</Text>
                                                     </Pressable>
                                                 </View>
                                             </View>
@@ -876,7 +876,7 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
         ...typography.bodyBold,
         textTransform: 'uppercase',
         letterSpacing: 1,
-        color: colors.primaryStart,
+        color: colors.accentText,
     },
     resetButton: {
         flexDirection: 'row',
@@ -989,7 +989,7 @@ const getStyles = (colors: ThemeColors, insets: EdgeInsets) => StyleSheet.create
     },
     restoreButtonText: {
         ...typography.caption,
-        color: colors.primaryStart,
+        color: colors.accentText,
         fontWeight: '700',
     },
 });
