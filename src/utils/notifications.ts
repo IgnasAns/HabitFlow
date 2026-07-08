@@ -209,6 +209,67 @@ export async function cancelHabitReminder(habitId: string) {
     }
 }
 
+const STREAK_DANGER_TYPE = 'streak_danger';
+
+/**
+ * One-shot evening reminder that a streak is about to break. Scheduled when
+ * the app is backgrounded with due habits unfinished; cancelled on re-open
+ * (or replaced on the next backgrounding). Fires at 20:30 local time — or,
+ * if it's already evening, ~45 minutes from now — and never after 22:30.
+ */
+export async function scheduleStreakDangerNudge(title: string, body: string) {
+    if (Platform.OS === 'web') return;
+
+    try {
+        await cancelStreakDangerNudge();
+
+        const now = new Date();
+        const target = new Date();
+        target.setHours(20, 30, 0, 0);
+        const cutoff = new Date();
+        cutoff.setHours(22, 30, 0, 0);
+
+        let seconds = Math.floor((target.getTime() - now.getTime()) / 1000);
+        if (seconds < 60) {
+            // Already evening: nudge in 45 minutes, but not past the cutoff
+            if (now >= cutoff) return;
+            seconds = Math.min(45 * 60, Math.floor((cutoff.getTime() - now.getTime()) / 1000));
+            if (seconds < 60) return;
+        }
+
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title,
+                body,
+                data: { type: STREAK_DANGER_TYPE },
+                sound: 'default',
+            },
+            trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                seconds,
+                repeats: false,
+                ...(Platform.OS === 'android' && { channelId: 'default' }),
+            },
+        });
+    } catch (error) {
+        console.error('Failed to schedule streak danger nudge:', error);
+    }
+}
+
+export async function cancelStreakDangerNudge() {
+    if (Platform.OS === 'web') return;
+    try {
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        for (const notif of scheduled) {
+            if (notif.content.data?.type === STREAK_DANGER_TYPE) {
+                await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+            }
+        }
+    } catch (error) {
+        console.error('Error cancelling streak danger nudge:', error);
+    }
+}
+
 export async function clearGlobalReminders() {
     if (Platform.OS === 'web') return;
     try {

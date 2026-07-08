@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
-import { storage, calculateLevel, calculateHabitTotalXp } from '../utils/storage';
+import { AppState } from 'react-native';
+import { storage, calculateLevel, calculateHabitTotalXp, calculateStreak } from '../utils/storage';
 import { computeToggle, computeIncrement, buildToggleResult } from '../utils/habitLogic';
-import { scheduleHabitReminder, cancelHabitReminder } from '../utils/notifications';
+import {
+    applyStreakSavers,
+    biggestStreakAtRisk,
+    isPerfectDay,
+    MAX_FREEZE_TOKENS,
+    TOKEN_EARNING_MILESTONE,
+} from '../utils/engagement';
+import type { BackupSnapshot } from '../utils/storage';
+import {
+    scheduleHabitReminder,
+    cancelHabitReminder,
+    scheduleStreakDangerNudge,
+    cancelStreakDangerNudge,
+} from '../utils/notifications';
+import { useI18n, interpolate } from './I18nContext';
 import { updateWidgetData } from '../utils/widgetData';
 import { Habit, UserStats, LevelInfo, ToggleResult } from '../types';
 
@@ -12,9 +27,10 @@ type HabitAction =
     | { type: 'ADD_HABIT'; payload: Habit }
     | { type: 'UPDATE_HABIT'; payload: Habit }
     | { type: 'DELETE_HABIT'; payload: string }
-    | { type: 'TOGGLE_COMPLETE'; payload: ToggleResult }
+    | { type: 'TOGGLE_COMPLETE'; payload: ToggleResult & { perfectDay?: boolean; tokenEarned?: boolean } }
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'REORDER_HABITS'; payload: Habit[] }
+    | { type: 'SET_SAVER_NOTICE'; payload: StreakSaverNotice[] | null }
     | { type: 'CLEAR_LAST_ACTION' };
 
 interface LastAction {
@@ -24,6 +40,14 @@ interface LastAction {
     xpGained?: number;
     leveledUp?: boolean;
     newLevel?: number;
+    milestone?: number;
+    perfectDay?: boolean;
+    tokenEarned?: boolean;
+}
+
+export interface StreakSaverNotice {
+    habitName: string;
+    streak: number;
 }
 
 interface HabitState {
@@ -32,6 +56,8 @@ interface HabitState {
     levelInfo: LevelInfo;
     isLoading: boolean;
     lastAction: LastAction | null;
+    // Set once on load when Streak Saver tokens were spent overnight.
+    streakSaverNotice: StreakSaverNotice[] | null;
 }
 
 interface HabitContextType extends HabitState {
@@ -43,19 +69,23 @@ interface HabitContextType extends HabitState {
     moveHabit: (fromIndex: number, toIndex: number) => Promise<void>;
     reorderHabits: (habits: Habit[]) => Promise<void>;
     clearLastAction: () => void;
+    clearStreakSaverNotice: () => void;
     refreshData: () => Promise<void>;
     resetApp: () => Promise<void>;
     importData: (data: any) => Promise<boolean>;
+    listBackups: () => Promise<BackupSnapshot[]>;
+    restoreBackup: (snapshot: BackupSnapshot) => Promise<boolean>;
 }
 
 const HabitContext = createContext<HabitContextType | null>(null);
 
 const initialState: HabitState = {
     habits: [],
-    userStats: { totalXp: 0, achievements: [] },
+    userStats: { totalXp: 0, achievements: [], freezeTokens: 0 },
     levelInfo: { level: 1, currentXp: 0, xpNeeded: 100 },
     isLoading: true,
     lastAction: null,
+    streakSaverNotice: null,
 };
 
 function habitReducer(state: HabitState, action: HabitAction): HabitState {
@@ -94,9 +124,11 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
             };
 
         case 'TOGGLE_COMPLETE':
-            // The logic here is now mostly visual since XP is pre-calculated in storage, 
+            // The logic here is now mostly visual since XP is pre-calculated in storage,
             // but we use the delta passed back to update local state optimistically/correctly.
             const newTotalXp = Math.max(0, state.userStats.totalXp + action.payload.xpGained);
+            const tokenEarned = !!action.payload.tokenEarned;
+            const currentTokens = state.userStats.freezeTokens ?? 0;
             return {
                 ...state,
                 habits: state.habits.map(h =>
@@ -104,7 +136,10 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
                 ),
                 userStats: {
                     ...state.userStats,
-                    totalXp: newTotalXp
+                    totalXp: newTotalXp,
+                    freezeTokens: tokenEarned
+                        ? Math.min(MAX_FREEZE_TOKENS, currentTokens + 1)
+                        : currentTokens,
                 },
                 levelInfo: calculateLevel(newTotalXp),
                 lastAction: {
@@ -113,6 +148,9 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
                     xpGained: action.payload.xpGained,
                     leveledUp: action.payload.leveledUp,
                     newLevel: action.payload.newLevel,
+                    milestone: action.payload.milestone,
+                    perfectDay: action.payload.perfectDay,
+                    tokenEarned,
                 },
             };
 
@@ -121,6 +159,9 @@ function habitReducer(state: HabitState, action: HabitAction): HabitState {
 
         case 'REORDER_HABITS':
             return { ...state, habits: action.payload };
+
+        case 'SET_SAVER_NOTICE':
+            return { ...state, streakSaverNotice: action.payload };
 
         case 'CLEAR_LAST_ACTION':
             return { ...state, lastAction: null };
@@ -136,6 +177,7 @@ interface HabitProviderProps {
 
 export function HabitProvider({ children }: HabitProviderProps) {
     const [state, dispatch] = useReducer(habitReducer, initialState);
+    const { t } = useI18n();
 
     // Use a ref to access latest state in callbacks without causing re-creation
     // This is critical for performance - callbacks stay stable while still reading fresh state
@@ -144,6 +186,36 @@ export function HabitProvider({ children }: HabitProviderProps) {
         stateRef.current = state;
     }, [state]);
 
+    // Keep the latest translations available to the AppState listener
+    const tRef = useRef(t);
+    useEffect(() => {
+        tRef.current = t;
+    }, [t]);
+
+    // Streak-danger nudge: when the app goes to background with the day's
+    // habits unfinished, schedule a one-shot evening reminder naming the
+    // biggest streak at risk. Cancel it whenever the app comes back.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') {
+                cancelStreakDangerNudge().catch(console.error);
+                return;
+            }
+            if (nextState !== 'background') return;
+            const atRisk = biggestStreakAtRisk(stateRef.current.habits);
+            if (!atRisk) {
+                cancelStreakDangerNudge().catch(console.error);
+                return;
+            }
+            const tr = tRef.current;
+            scheduleStreakDangerNudge(
+                interpolate(tr.engagement.nudgeTitle, { streak: atRisk.streak }),
+                interpolate(tr.engagement.nudgeBody, { name: atRisk.habitName }),
+            ).catch(console.error);
+        });
+        return () => sub.remove();
+    }, []);
+
     // Load data on mount
     useEffect(() => {
         loadData();
@@ -151,8 +223,27 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
     const loadData = useCallback(async (): Promise<void> => {
         dispatch({ type: 'SET_LOADING', payload: true });
-        const habits = await storage.getHabits();
+        let habits = await storage.getHabits();
         let userStats = await storage.getUserStats();
+
+        // Spend Streak Saver tokens to bridge yesterday for habits that
+        // missed it but had a streak worth protecting.
+        const saverResult = applyStreakSavers(habits, userStats.freezeTokens ?? 0);
+        if (saverResult.saved.length > 0) {
+            habits = saverResult.habits;
+            userStats = { ...userStats, freezeTokens: saverResult.tokensLeft };
+            dispatch({
+                type: 'SET_SAVER_NOTICE',
+                payload: saverResult.saved.map(s => ({ habitName: s.habitName, streak: s.streak })),
+            });
+        }
+
+        // Stored streaks go stale when the app isn't opened for a day;
+        // recompute them all on load.
+        habits = habits.map(h => ({
+            ...h,
+            streak: calculateStreak(h.completions, h.dailyTarget || 1, h.frequency, h.frozenDates),
+        }));
 
         // Calculate total XP from all habits to ensure consistency (fix phantom XP)
         const realTotalXp = habits.reduce((total, habit) => {
@@ -165,12 +256,16 @@ export function HabitProvider({ children }: HabitProviderProps) {
                 ...userStats,
                 totalXp: realTotalXp
             };
-            // Save the corrected stats
-            await storage.saveUserStats(userStats);
         }
+        // Persist any load-time corrections (savers, streaks, XP)
+        await storage.saveHabits(habits);
+        await storage.saveUserStats(userStats);
 
         dispatch({ type: 'SET_HABITS', payload: habits });
         dispatch({ type: 'SET_USER_STATS', payload: userStats });
+
+        // Weekly safety snapshot (no-op if a recent one exists)
+        storage.maybeAutoBackup().catch(console.error);
     }, []);
 
     // Debounced Auto-Save: Persist state changes to storage
@@ -239,12 +334,17 @@ export function HabitProvider({ children }: HabitProviderProps) {
 
         const updatedHabit = computeToggle(habit, dateKey);
         const result = buildToggleResult(habit, updatedHabit, currentState.userStats.totalXp);
+        const updatedHabits = currentState.habits.map(h => h.id === id ? updatedHabit : h);
+
+        // Perfect day: only celebrate the toggle that *makes* the day perfect
+        const perfectDay = !isPerfectDay(currentState.habits) && isPerfectDay(updatedHabits);
+        // Milestones from 7 days up also earn a Streak Saver token
+        const tokenEarned = !!result.milestone && result.milestone >= TOKEN_EARNING_MILESTONE;
 
         // OPTIMISTIC UPDATE: Dispatch immediately for instant UI feedback
-        dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+        dispatch({ type: 'TOGGLE_COMPLETE', payload: { ...result, perfectDay, tokenEarned } });
 
         // Update widgets immediately with the new habits array
-        const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
         updateWidgetData(updatedHabits).catch(console.error);
 
         // Persistence happens via the debounced auto-save effect.
@@ -263,12 +363,14 @@ export function HabitProvider({ children }: HabitProviderProps) {
         if (!updatedHabit) return; // No-op (already at target)
 
         const result = buildToggleResult(habit, updatedHabit, currentState.userStats.totalXp);
+        const updatedHabits = currentState.habits.map(h => h.id === id ? updatedHabit : h);
+        const perfectDay = !isPerfectDay(currentState.habits) && isPerfectDay(updatedHabits);
+        const tokenEarned = !!result.milestone && result.milestone >= TOKEN_EARNING_MILESTONE;
 
         // OPTIMISTIC UPDATE: Dispatch immediately
-        dispatch({ type: 'TOGGLE_COMPLETE', payload: result });
+        dispatch({ type: 'TOGGLE_COMPLETE', payload: { ...result, perfectDay, tokenEarned } });
 
         // Update widgets immediately with the new habits array
-        const updatedHabits = stateRef.current.habits.map(h => h.id === id ? updatedHabit : h);
         updateWidgetData(updatedHabits).catch(console.error);
 
         // Persistence happens via the debounced auto-save effect.
@@ -299,6 +401,10 @@ export function HabitProvider({ children }: HabitProviderProps) {
         dispatch({ type: 'CLEAR_LAST_ACTION' });
     }, []);
 
+    const clearStreakSaverNotice = useCallback((): void => {
+        dispatch({ type: 'SET_SAVER_NOTICE', payload: null });
+    }, []);
+
     const resetApp = useCallback(async (): Promise<void> => {
         await storage.resetApp();
         await loadData();
@@ -310,6 +416,9 @@ export function HabitProvider({ children }: HabitProviderProps) {
             if (!data || !Array.isArray(data.habits) || !data.userStats) {
                 return false;
             }
+
+            // Snapshot current data first so a bad import is recoverable
+            await storage.createBackupNow();
 
             // Save to storage
             await storage.saveHabits(data.habits);
@@ -324,6 +433,14 @@ export function HabitProvider({ children }: HabitProviderProps) {
         }
     }, [loadData]);
 
+    const listBackups = useCallback(() => storage.listBackups(), []);
+
+    const restoreBackup = useCallback(async (snapshot: BackupSnapshot): Promise<boolean> => {
+        const ok = await storage.restoreBackup(snapshot);
+        if (ok) await loadData();
+        return ok;
+    }, [loadData]);
+
     const value: HabitContextType = useMemo(() => ({
         ...state,
         addHabit,
@@ -334,10 +451,13 @@ export function HabitProvider({ children }: HabitProviderProps) {
         moveHabit,
         reorderHabits,
         clearLastAction,
+        clearStreakSaverNotice,
         refreshData: loadData,
         resetApp,
         importData,
-    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, reorderHabits, clearLastAction, loadData, resetApp, importData]);
+        listBackups,
+        restoreBackup,
+    }), [state, addHabit, updateHabit, deleteHabit, toggleHabitCompletion, incrementHabitProgress, moveHabit, reorderHabits, clearLastAction, clearStreakSaverNotice, loadData, resetApp, importData, listBackups, restoreBackup]);
 
     return (
         <HabitContext.Provider value={value}>
