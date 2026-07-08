@@ -9,6 +9,7 @@ import {
     calculateLevel,
     effectiveTargetFor,
 } from './calculations';
+import { milestoneCrossed } from './engagement';
 
 /**
  * Three-state completion cycle for a given day:
@@ -39,7 +40,7 @@ export function computeToggle(habit: Habit, dateKey?: string): Habit {
         delete explicitFailures[targetDateKey];
     }
 
-    const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
+    const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency, habit.frozenDates);
     return { ...habit, completions, explicitFailures, streak };
 }
 
@@ -64,13 +65,14 @@ export function computeIncrement(habit: Habit, amount: number, dateKey?: string)
         delete explicitFailures[targetDateKey];
     }
 
-    const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency);
+    const streak = calculateStreak(completions, habit.dailyTarget || 1, habit.frequency, habit.frozenDates);
     return { ...habit, completions, explicitFailures, streak };
 }
 
 /**
- * Build the ToggleResult (xp delta + level-up info) for a transition from
- * `prevHabit` to `updatedHabit`, given the user's current total XP.
+ * Build the ToggleResult (xp delta + level-up + milestone info) for a
+ * transition from `prevHabit` to `updatedHabit`, given the user's current
+ * total XP.
  */
 export function buildToggleResult(prevHabit: Habit, updatedHabit: Habit, currentTotalXp: number): ToggleResult {
     const xpGained = calculateHabitTotalXp(updatedHabit) - calculateHabitTotalXp(prevHabit);
@@ -85,5 +87,6 @@ export function buildToggleResult(prevHabit: Habit, updatedHabit: Habit, current
         xpGained,
         leveledUp,
         newLevel: leveledUp ? newLevel : undefined,
+        milestone: milestoneCrossed(prevHabit.streak, updatedHabit.streak) ?? undefined,
     };
 }

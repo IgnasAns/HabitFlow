@@ -14,6 +14,9 @@ export interface Habit {
     explicitFailures: Record<string, boolean>; // dateKey -> true if explicitly marked as 'x'
     streak: number;
     archived?: boolean;
+    // Days bridged by a Streak Saver token: the day counts as "not missed"
+    // when computing streaks, but earns no XP. dateKey -> true.
+    frozenDates?: Record<string, boolean>;
     timeSlot?: {
         start: string; // "HH:mm" 24h format
         end: string;   // "HH:mm"
@@ -24,6 +27,9 @@ export interface Habit {
 export interface UserStats {
     totalXp: number;
     achievements: string[];
+    // Streak Saver tokens: earned at streak milestones, auto-spent to
+    // protect a missed day so the streak survives. Capped (see engagement.ts).
+    freezeTokens?: number;
 }
 
 export interface LevelInfo {
@@ -37,6 +43,8 @@ export interface ToggleResult {
     xpGained: number;
     leveledUp?: boolean;
     newLevel?: number;
+    // Highest streak milestone crossed by this toggle (see STREAK_MILESTONES).
+    milestone?: number;
 }
 export interface GridDay {
     key: string;

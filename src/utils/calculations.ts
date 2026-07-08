@@ -25,45 +25,36 @@ export const getDateKey = (date: Date): string => {
 export const effectiveTargetFor = (habit: Pick<Habit, 'frequency' | 'dailyTarget'>): number =>
     habit.frequency === 'weekly' ? 1 : (habit.dailyTarget || 1);
 
-// Calculate streak for a habit
-export const calculateStreak = (completions: Record<string, number>, dailyTarget: number, frequency: Habit['frequency'] = 'daily'): number => {
+// Calculate streak for a habit.
+// Walks backwards day by day from today. An unfinished today never breaks the
+// chain (it is "pending"); a frozen day (Streak Saver) bridges the chain
+// without adding to the count.
+export const calculateStreak = (
+    completions: Record<string, number>,
+    dailyTarget: number,
+    frequency: Habit['frequency'] = 'daily',
+    frozenDates?: Record<string, boolean>,
+): number => {
     if (!completions) return 0;
 
     const effectiveTarget = frequency === 'weekly' ? 1 : dailyTarget;
+    const frozen = frozenDates || {};
 
-    // Get all completed dates, filter by target, sort in reverse chronological order
-    const completedDates = Object.keys(completions)
-        .filter(k => completions[k] >= effectiveTarget)
-        .sort()
-        .reverse();
+    let streak = 0;
+    const cursor = new Date();
+    const todayKey = getTodayKey();
+    if ((completions[todayKey] || 0) >= effectiveTarget) streak++;
+    cursor.setDate(cursor.getDate() - 1);
 
-    if (completedDates.length === 0) return 0;
-
-    const today = getTodayKey();
-    const yesterday = getDateKey(new Date(Date.now() - 86400000));
-
-    // Streak can only start from today or yesterday
-    if (completedDates[0] !== today && completedDates[0] !== yesterday) {
-        return 0;
-    }
-
-    let streak = 1;
-
-    let currentDate = parseDateKey(completedDates[0]);
-
-    // Check for consecutive days going backwards
-    for (let i = 1; i < completedDates.length; i++) {
-        // Calculate what yesterday would be from the current date
-        const expectedPrevDate = new Date(currentDate);
-        expectedPrevDate.setDate(expectedPrevDate.getDate() - 1);
-        const expectedPrevKey = getDateKey(expectedPrevDate);
-
-        if (completedDates[i] === expectedPrevKey) {
+    // 10-year cap to guarantee termination
+    for (let i = 0; i < 3650; i++) {
+        const key = getDateKey(cursor);
+        if ((completions[key] || 0) >= effectiveTarget) {
             streak++;
-            currentDate = expectedPrevDate;
-        } else {
+        } else if (!frozen[key]) {
             break;
         }
+        cursor.setDate(cursor.getDate() - 1);
     }
 
     return streak;
@@ -89,10 +80,17 @@ export const calculateLevel = (totalXp: number): LevelInfo => {
 };
 
 // Calculate streak ending at a specific date
-export const calculateStreakForDate = (completions: Record<string, number>, dailyTarget: number, endDate: Date, frequency: Habit['frequency'] = 'daily'): number => {
+export const calculateStreakForDate = (
+    completions: Record<string, number>,
+    dailyTarget: number,
+    endDate: Date,
+    frequency: Habit['frequency'] = 'daily',
+    frozenDates?: Record<string, boolean>,
+): number => {
     if (!completions) return 0;
 
     const effectiveTarget = frequency === 'weekly' ? 1 : dailyTarget;
+    const frozen = frozenDates || {};
 
     // Create a temporary date object to traverse backwards
     let currentDate = new Date(endDate);
@@ -103,10 +101,10 @@ export const calculateStreakForDate = (completions: Record<string, number>, dail
         const dateKey = getDateKey(currentDate);
         if ((completions[dateKey] || 0) >= effectiveTarget) {
             streak++;
-            currentDate.setDate(currentDate.getDate() - 1);
-        } else {
+        } else if (!frozen[dateKey]) {
             break;
         }
+        currentDate.setDate(currentDate.getDate() - 1);
     }
     return streak;
 };
